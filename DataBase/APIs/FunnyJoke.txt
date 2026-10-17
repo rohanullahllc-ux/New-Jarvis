@@ -1,0 +1,1 @@
+https://v2.jokeapi.dev/joke/Any?safe-mode

@@ -1,0 +1,39 @@
+# ---- Secrets and per-machine configuration -------------------------------
+.env
+Data.txt
+
+# ---- Environments, caches, build output ----------------------------------
+.venv/
+__pycache__/
+*.pyc
+.claude/
+dist/
+build/
+*.egg-info/
+
+# ---- Personal data: never commit -----------------------------------------
+Logs/
+DataBase/Passwords/
+DataBase/API Keys/
+DataBase/Notes/
+DataBase/NotePad/
+DataBase/Tasks/
+DataBase/ScreenShot/
+DataBase/Downloads/
+DataBase/Books/
+# Face samples + the trained model are biometric data
+DataBase/FaceDetectionModule/samples/
+DataBase/FaceDetectionModule/trainer/
+
+# ---- Large personal media (moved out of the project during the rebuild) ---
+DataBase/Videos/
+DataBase/PDF Books/
+DataBase/Music/
+DataBase/Photos/
+DataBase/GooglePhotos/
+DataBase/9th DMC/
+DataBase/Study Material/
+DataBase/NasaDataBase/
+
+# ---- Big GUI artwork (the few assets the new GUI needs are re-added later) -
+G.U.I Material/
