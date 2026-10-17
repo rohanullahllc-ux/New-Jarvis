@@ -74,6 +74,15 @@ class EverydayCommandTests(BrainCase):
         self.assertRegex(self.no_tool("what time is it"), r"^It's \d{1,2}:\d{2} [AP]M\.$")
         self.assertIn(str(datetime.date.today().year), self.no_tool("what's the date"))
 
+    def test_questions_about_the_voice_get_a_helpful_answer(self):
+        for phrase in ("why are you not speaking", "why aren't you talking", "why are you never speaking to me", "say something",
+                       "can you speak", "are you there", "can you hear me", "test your voice", "voice test"):
+            with mock.patch.object(L.config, "TTS_ENABLED", True):
+                reply = self.no_tool(phrase)
+            self.assertIn("I'm speaking now", reply, phrase)
+        with mock.patch.object(L.config, "TTS_ENABLED", False):
+            self.assertIn("switched off", self.no_tool("why are you not speaking"))
+
     def test_greetings_and_help(self):
         self.assertTrue(self.no_tool("hello"))
         self.assertIn("space station", self.no_tool("what can you do"))

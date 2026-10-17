@@ -5,6 +5,7 @@ the window is a fake session.
 """
 import os
 import sys
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -14,7 +15,9 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from PyQt5.QtCore import Qt, QTimer  # noqa: E402
 from PyQt5.QtGui import QImage  # noqa: E402
+from PyQt5.QtTest import QTest  # noqa: E402
 from PyQt5.QtWidgets import QApplication, QDialog  # noqa: E402
 
 import config  # noqa: E402
@@ -118,12 +121,6 @@ class LoginDialogTests(unittest.TestCase):
         self.assertEqual(dialog.result(), QDialog.Accepted)
         self.assertIsNone(dialog.face_confirmed)
 
-    def test_enter_submits_the_password_too(self):
-        dialog = self.dialog()
-        dialog.password.setText("open sesame")
-        dialog.password.returnPressed.emit()
-        self.assertEqual(dialog.result(), QDialog.Accepted)
-
     def test_three_wrong_passwords_close_the_dialog_and_say_how_many_tries_are_left(self):
         dialog = self.dialog()
         self.type(dialog, "nope")
@@ -152,7 +149,8 @@ class LoginDialogTests(unittest.TestCase):
         self.assertFalse(dialog.unlock_button.isEnabled())
         self.assertIn("No unlock password is set", dialog.message.text())
         dialog.unlock_button.click()
-        dialog.password.returnPressed.emit()
+        QTest.keyClicks(dialog.password, "anything")
+        QTest.keyClick(dialog.password, Qt.Key_Return)
         self.assertNotEqual(dialog.result(), QDialog.Accepted)
 
     def test_a_hashed_password_works_like_a_plain_one(self):
@@ -184,7 +182,7 @@ class LoginDialogTests(unittest.TestCase):
     def test_the_camera_can_be_skipped(self):
         release = []
         with mock.patch.object(config, "FACE_CHECK", True), \
-                mock.patch.object(gate, "face_check", side_effect=lambda: (time.sleep(0.5), release.append(1), False)[2]):
+                mock.patch.object(gate, "face_check", side_effect=lambda cancelled=None: (time.sleep(0.5), release.append(1), False)[2]):
             dialog = self.dialog()
             self.type(dialog, "open sesame")
             self.assertFalse(dialog.skip_button.isHidden())
@@ -192,6 +190,167 @@ class LoginDialogTests(unittest.TestCase):
             self.assertEqual(dialog.result(), QDialog.Accepted)
             wait_for(lambda: release)                                   # the late camera result must not break anything
             APP.processEvents()
+
+
+class LoginDialogKeyboardTests(unittest.TestCase):
+    """People press Enter and Escape. These use real key presses and look at the FIRST result the dialog reports:
+    Enter used to press Cancel (the dialog's default button), and a late accept from the camera step hid that."""
+
+    PASSWORD = "open sesame"
+
+    def setUp(self):
+        for patcher in (mock.patch.multiple(config, JARVIS_PASSWORD=self.PASSWORD, JARVIS_PASSWORD_HASH="", FACE_CHECK=False),
+                        mock.patch("gui.login_dialog.QTimer.singleShot", side_effect=lambda ms, call: call())):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def open(self):
+        dialog = LoginDialog()
+        self.addCleanup(dialog.close)
+        dialog.outcomes = []
+        dialog.finished.connect(dialog.outcomes.append)
+        dialog.show()
+        dialog.password.setFocus()
+        return dialog
+
+    def type_password(self, dialog, text=PASSWORD):
+        QTest.keyClicks(dialog.password, text)
+
+    def press(self, widget, key):
+        QTest.keyClick(widget, key)
+        APP.processEvents()
+
+    def slow_camera(self, seen=True):
+        """A camera check that waits until told to finish (or until the dialog asks it to stop)."""
+        release, calls = threading.Event(), []
+
+        def camera(cancelled=None):
+            calls.append(cancelled)
+            deadline = time.time() + 10
+            while not release.is_set() and time.time() < deadline and not (cancelled and cancelled()):
+                time.sleep(0.01)
+            return seen
+
+        self.addCleanup(release.set)
+        return camera, release, calls
+
+    def test_enter_is_unlock_not_cancel(self):
+        dialog = self.open()
+        self.assertTrue(dialog.unlock_button.isDefault())
+        self.assertFalse(dialog.cancel_button.autoDefault())
+        self.assertFalse(dialog.skip_button.autoDefault())
+
+    def test_the_enter_key_unlocks_with_the_right_password(self):
+        dialog = self.open()
+        self.type_password(dialog)
+        self.press(dialog.password, Qt.Key_Return)
+        self.assertEqual(dialog.outcomes, [QDialog.Accepted])
+
+    def test_the_enter_key_on_the_numeric_keypad_works_too(self):
+        dialog = self.open()
+        self.type_password(dialog)
+        self.press(dialog.password, Qt.Key_Enter)
+        self.assertEqual(dialog.outcomes, [QDialog.Accepted])
+
+    def test_enter_with_the_camera_step_on_unlocks_and_never_cancels(self):
+        """The reported bug: correct password, Enter, the camera recognised the face, and still nothing started."""
+        camera, release, calls = self.slow_camera(seen=True)
+        with mock.patch.object(config, "FACE_CHECK", True), mock.patch.object(gate, "face_check", camera):
+            dialog = self.open()
+            self.type_password(dialog)
+            self.press(dialog.password, Qt.Key_Return)
+            self.assertEqual(dialog.outcomes, [], "the dialog closed before the camera had even finished")
+            release.set()
+            self.assertTrue(wait_for(lambda: dialog.outcomes))
+        self.assertEqual(dialog.outcomes, [QDialog.Accepted])
+        self.assertEqual(len(calls), 1)
+        self.assertIs(dialog.face_confirmed, True)
+
+    def test_a_wrong_password_with_enter_costs_one_try_not_two(self):
+        dialog = self.open()
+        self.type_password(dialog, "nope")
+        self.press(dialog.password, Qt.Key_Return)
+        self.assertIn("2 tries left", dialog.message.text())
+        self.assertEqual(dialog.outcomes, [])                           # still open
+        self.press(dialog.password, Qt.Key_Return)                      # Enter on the emptied box
+        self.assertIn("2 tries left", dialog.message.text())            # costs nothing
+
+    def test_enter_on_an_empty_box_is_not_a_try(self):
+        dialog = self.open()
+        for _ in range(5):
+            self.press(dialog.password, Qt.Key_Return)
+        self.type_password(dialog, "nope")
+        self.press(dialog.password, Qt.Key_Return)
+        self.assertIn("2 tries left", dialog.message.text())
+        self.assertEqual(dialog.outcomes, [])
+
+    def test_three_wrong_passwords_with_enter_close_it_once(self):
+        dialog = self.open()
+        for guess in ("one", "two", "three"):
+            self.type_password(dialog, guess)
+            self.press(dialog.password, Qt.Key_Return)
+        self.assertEqual(dialog.outcomes, [QDialog.Rejected])
+
+    def test_escape_before_the_password_is_right_cancels(self):
+        dialog = self.open()
+        self.press(dialog, Qt.Key_Escape)
+        self.assertEqual(dialog.outcomes, [QDialog.Rejected])
+
+    def test_escape_during_the_camera_step_skips_the_camera_instead_of_throwing_the_unlock_away(self):
+        camera, release, calls = self.slow_camera()
+        with mock.patch.object(config, "FACE_CHECK", True), mock.patch.object(gate, "face_check", camera):
+            dialog = self.open()
+            self.type_password(dialog)
+            self.press(dialog.password, Qt.Key_Return)
+            self.assertFalse(dialog.skip_button.isHidden())
+            self.press(dialog, Qt.Key_Escape)
+            self.assertEqual(dialog.outcomes, [QDialog.Accepted])
+            release.set()
+            time.sleep(0.2)
+            APP.processEvents()
+        self.assertEqual(dialog.outcomes, [QDialog.Accepted])           # the late camera result changes nothing
+
+    def test_enter_pressed_again_during_the_camera_step_does_not_cancel_anything(self):
+        camera, release, calls = self.slow_camera()
+        with mock.patch.object(config, "FACE_CHECK", True), mock.patch.object(gate, "face_check", camera):
+            dialog = self.open()
+            self.type_password(dialog)
+            self.press(dialog.password, Qt.Key_Return)
+            for _ in range(3):
+                self.press(dialog, Qt.Key_Return)
+                self.press(dialog.skip_button, Qt.Key_Return)
+            self.assertEqual(dialog.outcomes, [])                       # still waiting for the camera
+            release.set()
+            self.assertTrue(wait_for(lambda: dialog.outcomes))
+        self.assertEqual(dialog.outcomes, [QDialog.Accepted])
+
+    def test_nothing_is_left_to_cancel_once_the_password_was_right(self):
+        camera, release, calls = self.slow_camera()
+        with mock.patch.object(config, "FACE_CHECK", True), mock.patch.object(gate, "face_check", camera):
+            dialog = self.open()
+            self.type_password(dialog)
+            self.press(dialog.password, Qt.Key_Return)
+            self.assertTrue(dialog.cancel_button.isHidden())
+            self.assertFalse(dialog.skip_button.isHidden())
+
+    def test_closing_the_dialog_tells_the_camera_to_stop(self):
+        camera, release, calls = self.slow_camera()
+        with mock.patch.object(config, "FACE_CHECK", True), mock.patch.object(gate, "face_check", camera):
+            dialog = self.open()
+            self.type_password(dialog)
+            self.press(dialog.password, Qt.Key_Return)
+            self.assertTrue(wait_for(lambda: calls))
+            cancelled = calls[0]
+            self.assertFalse(cancelled())
+            self.press(dialog, Qt.Key_Escape)
+            self.assertTrue(cancelled())                                # the camera loop sees this and lets go of the webcam
+
+    def test_the_first_result_wins(self):
+        dialog = self.open()
+        dialog.reject()
+        dialog.accept()
+        self.assertEqual(dialog.outcomes, [QDialog.Rejected])
+        self.assertEqual(dialog.result(), QDialog.Rejected)
 
 
 class FakeDialog:
@@ -258,6 +417,25 @@ class WindowTests(WindowCase):
         self.addCleanup(window.close)
         window.start_button.click()
         self.assertEqual(shown, [False])                                # asked first, while nothing was running yet
+
+    def test_typing_the_password_and_pressing_enter_starts_the_session(self):
+        """The reported bug end to end: START, password, Enter... and the window stayed locked."""
+        camera = mock.patch.object(gate, "face_check", lambda cancelled=None: (time.sleep(0.2), True)[1])
+        settings = mock.patch.multiple(config, JARVIS_PASSWORD="open sesame", JARVIS_PASSWORD_HASH="", FACE_CHECK=True)
+        window = main_window.MainWindow(controller=self.controller)               # the REAL unlock dialog
+        self.addCleanup(window.close)
+
+        def type_it_in():
+            dialog = QApplication.activeModalWidget()
+            QTest.keyClicks(dialog.password, "open sesame")
+            QTest.keyClick(dialog.password, Qt.Key_Return)
+
+        with camera, settings:
+            QTimer.singleShot(100, type_it_in)
+            window.start_button.click()                                           # blocks until the dialog closes
+        self.assertTrue(self.controller.running)
+        self.assertEqual(window.pages.currentIndex(), 1)
+        self.assertNotEqual(window.status.text(), "Not unlocked.")
 
     def test_after_unlocking_commands_are_typed_and_answered(self):
         self.unlock()

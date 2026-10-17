@@ -124,6 +124,16 @@ def who_are_you(m, ask):
     return "I'm Jarvis, your personal assistant, back online and upgraded."
 
 
+@intent(r"\bwhy\b.*(?:\bnot\b|n't|\bnever\b).*\b(?:speak|speaking|talk|talking|say anything)\b",
+        r"^(?:can you |could you )?(?:speak|talk|say something)$",
+        r"^(?:are you there|(?:can you )?hear me|test (?:your |the )?voice|voice test)$")      # "can you" is stripped first
+def voice_check(m, ask):
+    if not config.TTS_ENABLED:
+        return "My voice is switched off in the dot env file, sir. Set T T S enabled to true to hear me."
+    return ("I'm speaking now, sir. If you can't hear me, check the Windows volume and the output device, "
+            "or run speech dot py in a terminal to test my voice.")
+
+
 @intent(r"^(?:what can you do|help|what are your (?:features|skills|commands))")
 def help_me(m, ask):
     return ("I can tell you the time, weather, crypto prices and exchange rates, do maths, look things up, translate, "

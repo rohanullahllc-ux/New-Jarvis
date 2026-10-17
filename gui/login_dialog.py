@@ -1,6 +1,12 @@
 """The unlock dialog: the password first, then an optional glance at the webcam (never required).
 
 It asks gate.py, the same module the terminal launcher asks, so the rules cannot differ between the two.
+
+Keyboard behaviour matters here, because people type the password and press Enter:
+* Enter means UNLOCK. In a dialog every button is "auto default" and Qt makes the focused one the default,
+  so Enter used to press Cancel (the last button) and quietly threw the unlock away.
+* Once the password is right, nothing a stray key does can cancel: Escape (or the window's X) now skips the
+  camera step and carries on, and the dialog reports only its first result.
 """
 import threading
 
@@ -23,12 +29,14 @@ class LoginDialog(QDialog):
         self.setFixedWidth(430)
         self.face_confirmed = None          # None = not checked, otherwise whether the camera knew you
         self._attempts = 0
-        self._closing = False
+        self._closing = False               # set once the dialog has reported its result; the camera is told to stop
+        self._camera_running = False        # from the right password until the dialog closes
 
         heading = QLabel("UNLOCK  JARVIS")
         heading.setObjectName("heading")
-        hint = QLabel("Jarvis is password protected.")
+        hint = QLabel("Jarvis is password protected. Type the password and press Enter.")
         hint.setObjectName("muted")
+        hint.setWordWrap(True)
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.Password)
         self.password.setPlaceholderText("Password")
@@ -40,6 +48,9 @@ class LoginDialog(QDialog):
         self.skip_button = QPushButton("Skip the camera")
         self.skip_button.hide()
         self.cancel_button = QPushButton("Cancel")
+        self.unlock_button.setDefault(True)
+        self.skip_button.setAutoDefault(False)
+        self.cancel_button.setAutoDefault(False)
 
         buttons = QHBoxLayout()
         buttons.addWidget(self.cancel_button)
@@ -65,6 +76,26 @@ class LoginDialog(QDialog):
         else:
             self.password.setFocus()
 
+    # ---- results
+
+    def done(self, result):
+        if self._closing:
+            return                          # the first result wins: a late accept can't undo a cancel, or the reverse
+        self._closing = True
+        super().done(result)
+
+    def reject(self):
+        if self._camera_running:
+            self._skip_camera()             # Escape or the X after the password was right: carry on without the camera
+        else:
+            super().reject()
+
+    def _finish(self):
+        self._camera_running = False
+        self.accept()
+
+    # ---- the password
+
     def _say(self, text, colour=theme.MUTED):
         self.message.setText(text)
         self.message.setStyleSheet(f"color: {colour};")
@@ -75,20 +106,25 @@ class LoginDialog(QDialog):
         self._say(text, theme.BAD)
 
     def submit(self):
-        if not self.unlock_button.isEnabled():
+        if self._closing or not self.unlock_button.isEnabled():
             return
-        if gate.check_password(self.password.text()):
+        attempt = self.password.text()
+        if not attempt:
+            return                          # Enter on an empty box is not a try (and one Enter arrives here twice)
+        if gate.check_password(attempt):
             self._granted()
             return
         self._attempts += 1
         self.password.clear()
-        if self._attempts >= self.MAX_ATTEMPTS:
+        left = self.MAX_ATTEMPTS - self._attempts
+        if left <= 0:
             self._lock_out("Access not granted.")
             QTimer.singleShot(1200, self.reject)
         else:
-            self._say(f"Access not granted. {self.MAX_ATTEMPTS - self._attempts} "
-                      f"{'try' if self.MAX_ATTEMPTS - self._attempts == 1 else 'tries'} left.", theme.BAD)
+            self._say(f"Access not granted. {left} {'try' if left == 1 else 'tries'} left.", theme.BAD)
             self.password.setFocus()
+
+    # ---- the camera
 
     def _granted(self):
         self.password.setEnabled(False)
@@ -96,17 +132,23 @@ class LoginDialog(QDialog):
         if not config.FACE_CHECK:
             self._finish()
             return
-        self._say("Access granted. Taking a quick look at the camera for extra confirmation. "
-                  "Press Esc in the camera window, or the button below, to skip.", theme.GOOD)
+        self._camera_running = True
+        self.cancel_button.hide()           # the password was right, so there is nothing left to cancel
         self.skip_button.show()
+        self.skip_button.setFocus()
+        self._say("Access granted. Taking a quick look at the camera for extra confirmation. "
+                  "Press Esc, or the button below, to skip.", theme.GOOD)
         threading.Thread(target=self._look, name="face-check", daemon=True).start()
 
     def _look(self):
         try:
-            found = bool(gate.face_check())
+            found = bool(gate.face_check(cancelled=lambda: self._closing))
         except Exception:
             found = False
-        self._face_done.emit(found)
+        try:
+            self._face_done.emit(found)
+        except RuntimeError:
+            pass                            # the dialog is already gone
 
     def _camera_finished(self, found):
         if self._closing:
@@ -119,8 +161,3 @@ class LoginDialog(QDialog):
 
     def _skip_camera(self):
         self._finish()
-
-    def _finish(self):
-        if not self._closing:
-            self._closing = True
-            self.accept()

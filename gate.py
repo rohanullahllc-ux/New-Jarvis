@@ -57,15 +57,17 @@ def check_password(attempt):
     return False
 
 
-def face_check():
+def face_check(cancelled=None):
     """Best-effort webcam confirmation. Returns True if a known face is seen; never raises.
 
     The password is what grants access - a missing camera, model or OpenCV just means
     "could not confirm", so callers treat this as an extra, not a requirement.
+    ``cancelled`` is an optional function returning True when the caller no longer wants the check (the unlock
+    window was closed); the camera is then released straight away.
     """
     try:
         from DataBase.FaceDetectionModule.FaceRecognition import FaceRocog
-        return bool(FaceRocog())
+        return bool(FaceRocog(cancelled=cancelled))
     except Exception as e:
         print(f": Face check skipped ({e})")
         return False

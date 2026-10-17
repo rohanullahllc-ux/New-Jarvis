@@ -9,11 +9,12 @@ MATCH_THRESHOLD = 70           # LBPH distance: LOWER means a better match; belo
 VERIFY_SECONDS = 8             # stop looking after this long so it never loops forever
 
 
-def FaceRocog(timeout=VERIFY_SECONDS):
+def FaceRocog(timeout=VERIFY_SECONDS, cancelled=None):
     """Best-effort webcam face check. Returns True if a known face is seen, else False.
 
     Never raises: if OpenCV, the trained model or the webcam isn't available it prints
     why and returns False, so the caller can decide what to do instead of crashing.
+    ``cancelled`` is an optional function; once it returns True the check stops at once and lets go of the camera.
     """
     try:
         import cv2
@@ -42,7 +43,7 @@ def FaceRocog(timeout=VERIFY_SECONDS):
     recognized = False
     deadline = time.time() + timeout
     try:
-        while time.time() < deadline:
+        while time.time() < deadline and not (cancelled and cancelled()):
             ok, frame = cam.read()
             if not ok:
                 break

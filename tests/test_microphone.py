@@ -160,7 +160,7 @@ class FailoverAndFallback(unittest.TestCase):
             microphone._active = "sounddevice"
             microphone._recognizer = sr.Recognizer()
             result = microphone.listen(timeout=1, phrase_time_limit=1)
-        self.assertEqual(result, "")                       # nobody spoke, but it did not crash or type
+        self.assertIsInstance(result, str)                 # whatever was heard (usually nothing): it did not crash or type
         self.assertEqual(microphone._active, "winmm")
         self.assertIn("sounddevice", microphone._failed)
         self.assertFalse(microphone._text_mode)
