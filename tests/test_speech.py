@@ -113,6 +113,16 @@ class SpeakTests(unittest.TestCase):
         self.speak("Not seen")
         self.assertEqual(seen, ["Reply for the GUI"])
 
+    def test_text_the_console_cannot_display_is_degraded_not_fatal(self):
+        raw = io.BytesIO()
+        narrow_console = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+        with mock.patch.object(speech, "TTS_ENABLED", False), redirect_stdout(narrow_console):
+            speech.Speak("In Urdu that is صبح بخیر")     # must not raise
+        narrow_console.flush()
+        shown = raw.getvalue().decode("cp1252")
+        self.assertIn("In Urdu that is", shown)
+        self.assertIn("?", shown)
+
     def test_the_configured_voice_is_chosen_by_name_fragment(self):
         voices = [mock.Mock(id="a", **{"name": "Microsoft David"}), mock.Mock(id="b", **{"name": "Microsoft Zira"})]
         # Mock(name=...) sets the mock's repr name, so assign the attribute explicitly

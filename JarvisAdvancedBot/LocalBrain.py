@@ -12,6 +12,7 @@ import operator
 import random
 import re
 
+import psutil
 import requests
 from anthropic.lib.tools import ToolError
 
@@ -414,7 +415,7 @@ def location(m, ask):
 @intent(r"\b(?:battery|cpu|ram|memory usage|disk space|storage|system (?:status|info|information|details)"
         r"|pc status|computer status|uptime)\b")
 def system_status(m, ask):
-    battery = T.psutil.sensors_battery()
+    battery = psutil.sensors_battery()
     if "battery" in m.string and battery:
         state = "charging" if battery.power_plugged else "not charging"
         return f"The battery is at {battery.percent:.0f} percent and {state}."

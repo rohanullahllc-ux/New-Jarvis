@@ -21,6 +21,8 @@ DataBase/Tasks/
 DataBase/ScreenShot/
 DataBase/Downloads/
 DataBase/Books/
+DataBase/Cache/
+DataBase/TimeTable/timetable.json
 # Face samples + the trained model are biometric data
 DataBase/FaceDetectionModule/samples/
 DataBase/FaceDetectionModule/trainer/

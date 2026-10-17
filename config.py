@@ -55,4 +55,6 @@ WOLFRAM_APP_ID = key("WOLFRAM_APP_ID")
 NASA_API_KEY = key("NASA_API_KEY", "DEMO_KEY")      # DEMO_KEY works with low rate limits
 RAPIDAPI_KEY = key("RAPIDAPI_KEY")
 EMAIL_ADDRESS = key("EMAIL_ADDRESS")
-EMAIL_PASSWORD = key("EMAIL_PASSWORD")              # use a Gmail *app password*
+EMAIL_PASSWORD = key("EMAIL_PASSWORD")              # use an *app password*, never your real one
+EMAIL_SMTP_HOST = key("EMAIL_SMTP_HOST")            # blank = worked out from the address (Gmail, Yahoo, Outlook, iCloud)
+EMAIL_SMTP_PORT = int(key("EMAIL_SMTP_PORT")) if key("EMAIL_SMTP_PORT").isdigit() else 587

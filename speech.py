@@ -13,6 +13,7 @@ that wants to say something imports it from here:
 * Every thread gets its own speech engine, because Windows' SAPI voices are COM objects
   that must not be shared across threads (the GUI speaks from a worker thread).
 """
+import sys
 import threading
 
 from config import TTS_ENABLED, TTS_VOICE
@@ -20,6 +21,15 @@ from config import TTS_ENABLED, TTS_VOICE
 _local = threading.local()
 _listeners = []          # extra places a reply should appear, e.g. the GUI's conversation pane
 _say_lock = threading.Lock()
+
+
+def _show(line):
+    """Print a line; characters the console can't display (Urdu on a cp1252 pane) become '?' instead of crashing."""
+    try:
+        print(line)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(line.encode(encoding, errors="replace").decode(encoding))
 
 
 def add_listener(callback):
@@ -65,7 +75,7 @@ def Speak(text):
     text = str(text).strip()
     if not text:
         return
-    print(f"\nA.I : {text}\n")
+    _show(f"\nA.I : {text}\n")
     for callback in list(_listeners):
         try:
             callback(text)
