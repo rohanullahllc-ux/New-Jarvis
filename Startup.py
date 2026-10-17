@@ -1,66 +1,92 @@
+"""Terminal launcher:  python Startup.py
+
+Wake word -> password -> (optional) camera check -> the assistant session.
+
+This is one of the two supported ways in (the other is JarvisGUI.py). Both go through
+gate.py, so nothing here decides who is allowed in, and MainCode.py can no longer be
+run on its own to skip the password.
+
+Saying "sleep" ends the session and returns to the wake-word prompt (the password is asked
+again next time, like a locked screen). Saying "quit" ends the program.
+"""
+import getpass
+import re
+import traceback
+
 import gate
-from MainCode import Speak
+from config import FACE_CHECK, USER_NAME
 from microphone import listen
+from speech import Speak
 
-WakeWord1 = "hey jarvis"
-WakeWord2 = "wake up"
-WakeWord3 = "get up"
-
-
-def Listen():
-    return listen()
+WAKE_WORDS = ("hey jarvis", "wake up", "get up")
+QUIT_COMMAND = re.compile(r"(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?")
+MAX_ATTEMPTS = 3
 
 
-def _start_assistant():
-    """Hand control to the main assistant loop (voice or typed, per INPUT_MODE)."""
-    import MainCode
-    MainCode.taskExe()
+def _read_password():
+    """Read the password without echoing it (isolated so tests can supply one)."""
+    try:
+        return getpass.getpass("Enter the password: ")
+    except OSError:                       # no real console to hide typing on (e.g. an IDE output pane)
+        return input("Enter the password: ")
 
 
-def Pass(pass_inp):
-    """Check the password, then run a best-effort face check. Returns True to grant access."""
-    if not gate.check_password(pass_inp):
-        Speak("Access Not Granted .")
+def authenticate():
+    """Up to MAX_ATTEMPTS password tries, then the optional camera check. True if the user may enter."""
+    if not gate.password_configured():
+        Speak("No unlock password is set. Add JARVIS_PASSWORD to the dot env file, "
+              "or run gate dot py with the set password option.")
+        return False
+    Speak("Jarvis is password protected. Kindly provide the password.")
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            entered = _read_password()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+        if gate.check_password(entered):
+            break
+        Speak("Access not granted." + (" Try again." if attempt < MAX_ATTEMPTS else ""))
+    else:
         return False
 
-    Speak("Access Granted .")
-    # The password already granted access; the face check is extra confirmation and must never
-    # block entry or crash (no camera, model, or OpenCV is a "skip", not a failure).
-    try:
-        Speak("For more confirmation I will look at the camera...")
+    Speak("Access granted.")
+    if FACE_CHECK:
+        # An extra confirmation, never a requirement: the password already granted access, so a
+        # missing camera or model just means "could not confirm".
+        Speak("I will take a quick look at the camera for extra confirmation.")
         if gate.face_check():
-            Speak("Face confirmed. Welcome back, sir.")
+            Speak(f"Face confirmed. Welcome back, {USER_NAME}.")
         else:
             Speak("I couldn't confirm your face, but your password was correct, so I'll continue.")
-    except Exception as e:
-        print(f": Face check skipped ({e})")
     return True
 
 
-def Wake():
+def run():
     print("\n: Jarvis is asleep. Say or type a wake word to start: "
-          f"'{WakeWord1}', '{WakeWord2}' or '{WakeWord3}'. Type 'quit' to exit.\n")
+          + ", ".join(f"'{w}'" for w in WAKE_WORDS) + ". Say or type 'quit' to exit.\n")
     while True:
-        q = Listen()
-        if WakeWord1 in q or WakeWord2 in q or WakeWord3 in q:
-            Speak("Jarvis program is password protected...")
-            Speak("Kindly provide the correct password to access.")
+        heard = listen()
+        if any(word in heard for word in WAKE_WORDS):
+            if not authenticate():
+                continue
+            import MainCode                      # loaded only once someone has been let in
             try:
-                passs = input("Enter the correct password: ")
-            except (EOFError, KeyboardInterrupt):
-                print("\n: Goodbye, sir.")
+                outcome = MainCode.taskExe()
+            except Exception:
+                traceback.print_exc()            # show the real error rather than hiding it
+                Speak("Something went wrong inside that session. Say a wake word to start again.")
+                continue
+            if outcome == "quit":
                 return
-            if Pass(passs):
-                _start_assistant()
-                return
-
-        elif "terminate" in q or "quit" in q or "exit" in q:
-            Speak("Ok sir terminating")
+            # "sleep": fall through to listening for the wake word again
+        elif QUIT_COMMAND.fullmatch(heard.replace("jarvis", "").strip()):
+            Speak("Ok sir, shutting down.")
             return
 
 
 if __name__ == "__main__":
     try:
-        Wake()
+        run()
     except KeyboardInterrupt:
         print("\n: Goodbye, sir.")
