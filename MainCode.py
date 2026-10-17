@@ -11,7 +11,6 @@ import platform
 import math
 import os
 import re
-import pyttsx3
 import speech_recognition as sr
 from microphone import listen
 from bs4 import BeautifulSoup
@@ -32,20 +31,7 @@ yellow = fg('yellow')
 UserName = "Mr Khan"
 BotName = "AI-Jarvis-M-2.O"
 
-def Speak(Text):
-    engine = pyttsx3.init("sapi5")
-    voices = engine.getProperty('voices')
-    engine.setProperty('voice',voices[0].id)
-    lengthcode = len(Text)
-    if lengthcode>30:
-        engine.setProperty('rate',200)
-    else:
-        engine.setProperty('rate',170)
-    print("    ")
-    print(f"A.I : {Text}")
-    engine.say(text=Text)
-    engine.runAndWait()
-    print("    ")
+from speech import Speak  # noqa: E402,F401  (kept importable from here for the legacy modules)
 
 
 def Listen():

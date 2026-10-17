@@ -41,6 +41,7 @@ INPUT_MODE = key("INPUT_MODE", "voice").lower()     # "voice" or "text"
 MIC_BACKEND = key("MIC_BACKEND", "auto").lower()    # auto | sounddevice | winmm
 MIC_DEVICE = key("MIC_DEVICE")                      # blank = Windows default; or part of a device name, or an index
 TTS_ENABLED = flag("TTS_ENABLED", True)             # false = Jarvis answers in text only (much faster)
+TTS_VOICE = key("TTS_VOICE")                        # part of a Windows voice name, e.g. Zira; blank = the first installed voice
 STARTUP_GREETING = key("STARTUP_GREETING", "short").lower()  # short | full | silent
 
 # ---- AI brain (optional) --------------------------------------------------
