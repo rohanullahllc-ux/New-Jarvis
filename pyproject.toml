@@ -1,0 +1,27 @@
+# Packaging for ONE module of this project: winmm_mic.py, the dependency-free Windows
+# microphone backend. Jarvis itself imports winmm_mic.py straight from the project folder
+# and never needs this wheel installed; it exists so the same code can be reused elsewhere:
+#
+#     python -m pip wheel . --no-deps -w dist
+#     python -m pip install dist/jarvis_winmm_audio-0.1.0-py3-none-any.whl
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis-winmm-audio"
+version = "0.1.0"
+description = "Microphone capture for Windows in pure Python (ctypes over winmm.dll) - no PortAudio, PyAudio or compiler needed."
+requires-python = ">=3.8"
+dependencies = []
+classifiers = [
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Capture/Recording",
+]
+
+[project.optional-dependencies]
+speech = ["SpeechRecognition"]   # only needed to use WinMMMicrophone as a speech_recognition AudioSource
+
+[tool.setuptools]
+py-modules = ["winmm_mic"]
