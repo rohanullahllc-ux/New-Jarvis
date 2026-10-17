@@ -117,56 +117,69 @@ def _body(name, kind, radius, gravity, spin, orbit, moons, temperature, distance
 
 
 BODIES = {
-    "sun": _body("the Sun", "star", "695,700 km", 274, "about 25 Earth days", "it goes once around the centre of the Milky Way in about 230 million years",
+    "sun": _body("the Sun", "star", "695,700 km", 274, "about 25 Earth days", "once around the centre of the Milky Way in about 230 million years",
                  "eight planets circling it", "5,500 degrees Celsius on the surface and 15 million at the core",
                  "150 million km from Earth", "It holds 99.8 percent of all the mass in the solar system."),
-    "mercury": _body("Mercury", "planet", "2,440 km", 3.7, "58.6 Earth days", "it goes once around the Sun in 88 Earth days", "no moons",
+    "mercury": _body("Mercury", "planet", "2,440 km", 3.7, "58.6 Earth days", "once around the Sun in 88 Earth days", "no moons",
                      "about 167 degrees Celsius on average, from minus 180 at night to 430 by day", "58 million km from the Sun",
                      "It is the smallest planet and the closest to the Sun."),
-    "venus": _body("Venus", "planet", "6,052 km", 8.9, "243 Earth days", "it goes once around the Sun in 225 Earth days", "no moons",
+    "venus": _body("Venus", "planet", "6,052 km", 8.9, "243 Earth days", "once around the Sun in 225 Earth days", "no moons",
                    "about 464 degrees Celsius, hot enough to melt lead", "108 million km from the Sun",
                    "It is the hottest planet, it spins backwards, and its day is longer than its year."),
-    "earth": _body("Earth", "planet", "6,371 km", 9.8, "24 hours", "it goes once around the Sun in 365.25 days", "one moon",
+    "earth": _body("Earth", "planet", "6,371 km", 9.8, "24 hours", "once around the Sun in 365.25 days", "one moon",
                    "about 15 degrees Celsius on average", "150 million km from the Sun",
                    "It is the only place we know of that has life."),
-    "moon": _body("the Moon", "natural satellite of Earth", "1,737 km", 1.6, "27.3 Earth days", "it goes once around the Earth in 27.3 days",
+    "moon": _body("the Moon", "natural satellite of Earth", "1,737 km", 1.6, "27.3 Earth days", "once around the Earth in 27.3 days",
                   "no moons of its own", "from minus 173 to 127 degrees Celsius", "384,400 km from Earth",
                   "It always shows us the same face, and it is drifting away from Earth by about 3.8 centimetres a year."),
-    "mars": _body("Mars", "planet", "3,390 km", 3.7, "24.6 hours", "it goes once around the Sun in 687 Earth days",
+    "mars": _body("Mars", "planet", "3,390 km", 3.7, "24.6 hours", "once around the Sun in 687 Earth days",
                   "two moons, Phobos and Deimos", "about minus 65 degrees Celsius on average", "228 million km from the Sun",
                   "It is home to Olympus Mons, the tallest volcano in the solar system."),
-    "jupiter": _body("Jupiter", "planet", "69,911 km", 24.8, "9.9 hours", "it goes once around the Sun in 11.9 Earth years",
+    "jupiter": _body("Jupiter", "planet", "69,911 km", 24.8, "9.9 hours", "once around the Sun in 11.9 Earth years",
                      "more than 90 known moons", "about minus 110 degrees Celsius at the cloud tops", "778 million km from the Sun",
                      "Its Great Red Spot is a storm bigger than Earth that has raged for centuries."),
-    "saturn": _body("Saturn", "planet", "58,232 km", 10.4, "10.7 hours", "it goes once around the Sun in 29.4 Earth years",
+    "saturn": _body("Saturn", "planet", "58,232 km", 10.4, "10.7 hours", "once around the Sun in 29.4 Earth years",
                     "more than 140 known moons", "about minus 140 degrees Celsius at the cloud tops", "1.43 billion km from the Sun",
                     "Its spectacular rings are made mostly of water ice."),
-    "uranus": _body("Uranus", "planet", "25,362 km", 8.7, "17.2 hours", "it goes once around the Sun in 84 Earth years",
+    "uranus": _body("Uranus", "planet", "25,362 km", 8.7, "17.2 hours", "once around the Sun in 84 Earth years",
                     "more than 25 known moons", "about minus 195 degrees Celsius", "2.87 billion km from the Sun",
                     "It rolls around the Sun tipped over on its side, and it spins backwards."),
-    "neptune": _body("Neptune", "planet", "24,622 km", 11.2, "16.1 hours", "it goes once around the Sun in 165 Earth years",
+    "neptune": _body("Neptune", "planet", "24,622 km", 11.2, "16.1 hours", "once around the Sun in 165 Earth years",
                      "about 16 known moons", "about minus 200 degrees Celsius", "4.5 billion km from the Sun",
                      "It has the fastest winds in the solar system, over 2,000 kilometres an hour."),
-    "pluto": _body("Pluto", "dwarf planet", "1,188 km", 0.62, "6.4 Earth days", "it goes once around the Sun in 248 Earth years",
+    "pluto": _body("Pluto", "dwarf planet", "1,188 km", 0.62, "6.4 Earth days", "once around the Sun in 248 Earth years",
                    "five moons", "about minus 230 degrees Celsius", "5.9 billion km from the Sun on average",
                    "A heart-shaped glacier of nitrogen ice covers part of its surface."),
 }
 
 
 @beta_tool
-def nasa_solar_body_facts(body: str) -> str:
-    """Give key facts about the Sun, the Moon, one of the eight planets, or Pluto: size, gravity, day and year length, moons, temperature and distance.
+def nasa_solar_body_facts(body: str, aspect: Literal["all", "size", "gravity", "day", "year", "moons", "temperature", "distance"] = "all") -> str:
+    """Give key facts about the Sun, the Moon, one of the eight planets, or Pluto. For a specific question ("how hot is Mars?") ask for just that aspect to get a short answer.
 
     Args:
         body: Name of the body, e.g. "Mars", "Jupiter", "the Moon" or "the Sun".
+        aspect: all for a full fact sheet, or one of: size, gravity, day (how long it takes to spin once), year (how long it takes to orbit), moons, temperature, distance.
     """
     key = re.sub(r"^(?:the |planet )+|(?: planet)$|'s$", "", body.strip().lower()).strip()
     if key not in BODIES:
         raise ToolError("I have facts for the Sun, the Moon, the eight planets and Pluto. Try one of those.")
     b = BODIES[key]
     name = b["name"][0].upper() + b["name"][1:]
+    percent = f"{b['gravity'] / 9.81 * 100:.0f}"
+    short = {
+        "size": f"{name} has a radius of {b['radius']}.",
+        "gravity": f"Surface gravity on {b['name']} is {b['gravity']} metres per second squared, {percent} percent of Earth's.",
+        "day": f"One turn of {b['name']} on its axis takes {b['spin']}.",
+        "year": f"{name} goes {b['orbit']}.",
+        "moons": f"{name} has {b['moons']}.",
+        "temperature": f"Temperature on {b['name']}: {b['temperature']}.",
+        "distance": f"{name} is {b['distance']}.",
+    }
+    if aspect in short:
+        return short[aspect]
     return (f"{name} is a {b['kind']}. Radius {b['radius']}; surface gravity {b['gravity']} metres per second squared "
-            f"({b['gravity'] / 9.81 * 100:.0f} percent of Earth's). One turn on its axis takes {b['spin']}, and {b['orbit']}. "
+            f"({percent} percent of Earth's). One turn on its axis takes {b['spin']}, and it goes {b['orbit']}. "
             f"It has {b['moons']}. Temperature: {b['temperature']}. It is {b['distance']}. {b['fact']}")
 
 

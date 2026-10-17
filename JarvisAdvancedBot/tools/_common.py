@@ -138,11 +138,42 @@ def first_sentences(text, count=2):
     return " ".join(re.split(r"(?<=[.!?])\s+", (text or "").strip())[:count])
 
 
+def _open_clipboard(user32):
+    user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+    for _ in range(10):                              # another program may hold the clipboard for a moment
+        if user32.OpenClipboard(None):
+            return
+        time.sleep(0.05)
+    raise ToolError("The clipboard is busy. Try again.")
+
+
+def read_clipboard():
+    """The text on the Windows clipboard, or "" when it holds something else (a picture, files...)."""
+    CF_UNICODETEXT = 13
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    user32.GetClipboardData.argtypes = [ctypes.c_uint]
+    user32.GetClipboardData.restype = ctypes.c_void_p
+    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    _open_clipboard(user32)
+    try:
+        handle = user32.GetClipboardData(CF_UNICODETEXT)
+        pointer = kernel32.GlobalLock(handle) if handle else None
+        if not pointer:
+            return ""
+        try:
+            return ctypes.wstring_at(pointer)
+        finally:
+            kernel32.GlobalUnlock(handle)
+    finally:
+        user32.CloseClipboard()
+
+
 def copy_to_clipboard(text):
     """Put ``text`` on the Windows clipboard (Unicode-safe, no external program)."""
     CF_UNICODETEXT, GMEM_MOVEABLE = 13, 0x0002
     user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
-    user32.OpenClipboard.argtypes = [ctypes.c_void_p]
     user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
     user32.SetClipboardData.restype = ctypes.c_void_p
     kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
@@ -151,12 +182,7 @@ def copy_to_clipboard(text):
     kernel32.GlobalLock.restype = ctypes.c_void_p
     kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
     data = (text + "\0").encode("utf-16-le")
-    for _ in range(10):                              # another program may hold the clipboard for a moment
-        if user32.OpenClipboard(None):
-            break
-        time.sleep(0.05)
-    else:
-        raise ToolError("The clipboard is busy. Try again.")
+    _open_clipboard(user32)
     try:
         user32.EmptyClipboard()
         handle = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(data))

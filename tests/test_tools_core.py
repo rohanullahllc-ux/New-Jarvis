@@ -318,10 +318,13 @@ class NotesAndTasksTests(ToolCase):
     def test_notes_round_trip(self):
         self.assertEqual(T.read_notes(), "There are no saved notes.")
         self.assertEqual(T.take_note(text="milk, eggs", title="Shopping list!"), "Saved note 'Shopping list'")
-        T.take_note(text="call the bank")
-        self.assertIn("Shopping list", T.read_notes())
-        text = T.read_notes(title="shopping")
-        self.assertIn("milk, eggs", text)
+        self.assertEqual(T.take_note(text="call the bank about the loan on Monday morning"), "Saved your note")
+        listing = T.read_notes()
+        self.assertIn("Shopping list", listing)
+        self.assertIn("call the bank about the loan and so on", listing)       # untitled notes are named by what they say
+        self.assertNotIn("note-2026", listing)
+        self.assertIn("milk, eggs", T.read_notes(title="shopping"))
+        self.assertIn("Monday morning", T.read_notes(title="bank"))             # found by what it says, not just its title
         self.fails(lambda: T.read_notes(title="holiday"), "No note matching")
 
     def test_tasks_are_numbered_and_removable(self):

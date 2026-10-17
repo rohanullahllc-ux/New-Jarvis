@@ -102,6 +102,23 @@ class SolarBodyTests(ToolCase):
         for name in ("the moon", "The Moon", " MARS ", "planet Venus", "Jupiter's", "Pluto planet"):
             self.assertTrue(T.nasa_solar_body_facts(body=name), name)
 
+    def test_a_specific_question_gets_a_short_answer(self):
+        expected = {
+            "size": "Mars has a radius of 3,390 km.",
+            "gravity": "Surface gravity on Mars is 3.7 metres per second squared, 38 percent of Earth's.",
+            "day": "One turn of Mars on its axis takes 24.6 hours.",
+            "year": "Mars goes once around the Sun in 687 Earth days.",
+            "moons": "Mars has two moons, Phobos and Deimos.",
+            "temperature": "Temperature on Mars: about minus 65 degrees Celsius on average.",
+            "distance": "Mars is 228 million km from the Sun.",
+        }
+        for aspect, sentence in expected.items():
+            self.assertEqual(T.nasa_solar_body_facts(body="Mars", aspect=aspect), sentence)
+        self.assertEqual(T.nasa_solar_body_facts(body="the Moon", aspect="distance"), "The Moon is 384,400 km from Earth.")
+        self.assertEqual(T.nasa_solar_body_facts(body="the Sun", aspect="year"),
+                         "The Sun goes once around the centre of the Milky Way in about 230 million years.")
+        self.assertIn("Radius", T.nasa_solar_body_facts(body="Mars", aspect="all"))
+
     def test_gravity_is_compared_with_earths(self):
         self.assertIn("(100 percent of Earth's)", T.nasa_solar_body_facts(body="Earth"))
         self.assertIn("(16 percent of Earth's)", T.nasa_solar_body_facts(body="the Moon"))

@@ -33,7 +33,20 @@ def take_note(text: str, title: str = "") -> str:
     now = datetime.datetime.now()
     name = safe_filename(title) or now.strftime("note-%Y%m%d-%H%M%S")
     (target / f"{name}.txt").write_text(f"{now:%A, %d %B %Y, %I:%M %p}\n\n{text}\n", encoding="utf-8")
-    return f"Saved note '{name}'"
+    return f"Saved note '{name}'" if title.strip() else "Saved your note"
+
+
+def _note_body(path):
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    return raw.split("\n\n", 1)[1].strip() if "\n\n" in raw else raw.strip()
+
+
+def _note_label(path):
+    """A note's title, or for untitled notes (named by the time they were taken) the start of what it says."""
+    if re.fullmatch(r"note-\d{8}-\d{6}", path.stem):
+        words = _note_body(path).split()
+        return " ".join(words[:6]) + (" and so on" if len(words) > 6 else "") or path.stem
+    return path.stem
 
 
 @beta_tool
@@ -41,18 +54,19 @@ def read_notes(title: str = "") -> str:
     """List the saved notes, or read one of them.
 
     Args:
-        title: Title of the note to read, or empty to list the most recent notes.
+        title: Part of the note's title or of what it says, or empty to list the most recent notes.
     """
     notes_dir = _common.DB / "Notes"
     notes = sorted(notes_dir.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True) if notes_dir.exists() else []
     if not notes:
         return "There are no saved notes."
     if not title:
-        return "Recent notes: " + ", ".join(p.stem for p in notes[:10])
-    match = next((p for p in notes if title.lower() in p.stem.lower()), None)
+        return "Recent notes: " + ", ".join(_note_label(p) for p in notes[:10])
+    wanted = title.lower()
+    match = next((p for p in notes if wanted in p.stem.lower() or wanted in _note_body(p).lower()), None)
     if match is None:
-        raise ToolError(f"No note matching {title}. Notes: " + ", ".join(p.stem for p in notes[:10]))
-    return f"{match.stem}: {match.read_text(encoding='utf-8', errors='replace')[:2000]}"
+        raise ToolError(f"No note matching {title}. Notes: " + ", ".join(_note_label(p) for p in notes[:10]))
+    return f"{_note_label(match)}: {match.read_text(encoding='utf-8', errors='replace')[:2000].strip()}"
 
 
 # ---------------------------------------------------------------- to-do list

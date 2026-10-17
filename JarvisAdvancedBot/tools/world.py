@@ -145,7 +145,7 @@ def password_cracking_demo(password_length: int = 8) -> str:
     length = max(4, min(int(password_length), 12))
     made_up = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(length))
     guesses = random.randint(10 ** 6, 10 ** 8)
-    return (f"This is a pretend demonstration; nothing real is being cracked. I made up a {length} character password "
+    return (f"This is a pretend demonstration; nothing real is being cracked. I made up a password with {length} characters "
             f"and acted out the hunt. Loading wordlists, three, two, one, trying {guesses:,} combinations... "
             f"Found it: {made_up}. Of course I knew it all along, because I invented it myself.")
 

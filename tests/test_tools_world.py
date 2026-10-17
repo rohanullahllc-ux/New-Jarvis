@@ -97,6 +97,7 @@ class PartyTrickTests(ToolCase):
         text = T.password_cracking_demo(password_length=6)
         self.assertIn("pretend", text)
         self.assertIn("nothing real", text)
+        self.assertIn("a password with 6 characters", text)
         found = text.split("Found it: ")[1].split(".")[0]
         self.assertEqual(len(found), 6)
         self.assertTrue(found.isalnum())
