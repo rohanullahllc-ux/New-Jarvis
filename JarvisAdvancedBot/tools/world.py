@@ -324,8 +324,7 @@ def _read_attachment(raw):
     if not path.is_file():
         raise ToolError(f"I can't find the file {raw}.")
     resolved = path.resolve()
-    if (resolved.name.lower().startswith(".env") or resolved.name == "Data.txt"
-            or {".git", "FaceDetectionModule"} & set(resolved.parts)):
+    if resolved.name.lower().startswith(".env") or {".git", "FaceDetectionModule"} & set(resolved.parts):
         raise ToolError("That file holds private settings or face data, so I won't email it.")
     if resolved.stat().st_size > MAX_ATTACHMENT_BYTES:
         raise ToolError("Attachments over 20 megabytes won't go through email.")

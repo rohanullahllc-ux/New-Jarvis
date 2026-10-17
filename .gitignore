@@ -1,6 +1,5 @@
 # ---- Secrets and per-machine configuration -------------------------------
 .env
-Data.txt
 
 # ---- Environments, caches, build output ----------------------------------
 .venv/
