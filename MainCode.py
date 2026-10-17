@@ -135,17 +135,12 @@ def taskExe(listen=None, ask=None):
     listen = listen or Listen
     ask = ask or (lambda question: (Speak(question), listen())[1])
     _prewarm()
-    if STARTUP_GREETING != "silent":
-        Speak(greeting())
-        if STARTUP_GREETING == "full":
-            report = briefing()
-            if report:
-                Speak(" ".join(report))
     _announce_brain()
     if STARTUP_GREETING == "silent":
         print(": Ready.")
     else:
-        Speak("Ready for your command, sir.")
+        what_to_say = [greeting()] + (briefing() if STARTUP_GREETING == "full" else []) + ["Ready for your command, sir."]
+        Speak(" ".join(what_to_say))               # one utterance: every separate Speak() costs the speech engine a round trip
 
     while True:
         try:

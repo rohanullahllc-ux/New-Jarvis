@@ -103,23 +103,23 @@ class SessionCase(unittest.TestCase):
 
 
 class StartupModeTests(SessionCase):
-    def test_short_greets_once_and_says_it_is_ready(self):
+    def test_short_greets_and_says_it_is_ready_in_one_utterance(self):
         outcome, spoken, _ = self.run_session(["sleep"])
         self.assertEqual(outcome, "sleep")
-        self.assertTrue(spoken[0].startswith("Good ") and "Mr Khan" in spoken[0])
-        self.assertEqual(spoken[1], "Ready for your command, sir.")
-        self.assertEqual(spoken[2], "Going to sleep, sir. Say a wake word when you need me.")
+        self.assertRegex(spoken[0], r"^Good \w+ Mr Khan\. It's \w+day, \d+ \w+, \d+:\d\d [AP]M\. Ready for your command, sir\.$")
+        self.assertEqual(spoken[1], "Going to sleep, sir. Say a wake word when you need me.")
 
-    def test_full_adds_the_briefing_as_one_spoken_paragraph(self):
+    def test_full_puts_the_briefing_between_the_greeting_and_the_ready_line(self):
         with mock.patch.object(MainCode, "briefing", return_value=["Sunny.", "Study until nine."]):
             _, spoken, _ = self.run_session(["quit"], mode="full")
-        self.assertEqual(spoken[1], "Sunny. Study until nine.")
-        self.assertEqual(spoken[2], "Ready for your command, sir.")
+        self.assertRegex(spoken[0], r"^Good .* Sunny\. Study until nine\. Ready for your command, sir\.$")
+        self.assertEqual(spoken[1], "Goodbye, sir.")
 
     def test_full_with_nothing_to_report_says_nothing_extra(self):
         with mock.patch.object(MainCode, "briefing", return_value=[]):
             _, spoken, _ = self.run_session(["quit"], mode="full")
-        self.assertEqual(spoken[1], "Ready for your command, sir.")
+        self.assertTrue(spoken[0].endswith("Ready for your command, sir."))
+        self.assertNotIn("  ", spoken[0])
 
     def test_short_never_builds_the_briefing(self):
         with mock.patch.object(MainCode, "briefing") as briefing:
