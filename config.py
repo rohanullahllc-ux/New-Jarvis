@@ -21,6 +21,14 @@ def key(name, default=""):
     return os.getenv(name, default).strip()
 
 
+def number(name, default):
+    """Read a whole-number setting; anything that isn't one falls back to the default."""
+    try:
+        return int(key(name))
+    except ValueError:
+        return default
+
+
 def flag(name, default=True):
     """Read a true/false setting ("1", "true", "yes", "on" mean true)."""
     value = key(name)
@@ -42,7 +50,9 @@ INPUT_MODE = key("INPUT_MODE", "voice").lower()     # "voice" or "text"
 MIC_BACKEND = key("MIC_BACKEND", "auto").lower()    # auto | sounddevice | winmm
 MIC_DEVICE = key("MIC_DEVICE")                      # blank = Windows default; or part of a device name, or an index
 TTS_ENABLED = flag("TTS_ENABLED", True)             # false = Jarvis answers in text only (much faster)
-TTS_VOICE = key("TTS_VOICE")                        # part of a Windows voice name, e.g. Zira; blank = the first installed voice
+TTS_VOICE = key("TTS_VOICE")                        # part of a Windows voice name, e.g. Zira; blank = the Windows default voice
+TTS_VOLUME = number("TTS_VOLUME", 100)              # 0 to 100
+TTS_RATE = number("TTS_RATE", 0)                    # -10 (slower) to 10 (faster); 0 = normal
 STARTUP_GREETING = key("STARTUP_GREETING", "short").lower()  # short | full | silent
 GUI_ANIMATIONS = flag("GUI_ANIMATIONS", True)       # false = still pictures in the window (lighter on a slow PC)
 
@@ -57,4 +67,4 @@ NASA_API_KEY = key("NASA_API_KEY", "DEMO_KEY")      # DEMO_KEY works with low ra
 EMAIL_ADDRESS = key("EMAIL_ADDRESS")
 EMAIL_PASSWORD = key("EMAIL_PASSWORD")              # use an *app password*, never your real one
 EMAIL_SMTP_HOST = key("EMAIL_SMTP_HOST")            # blank = worked out from the address (Gmail, Yahoo, Outlook, iCloud)
-EMAIL_SMTP_PORT = int(key("EMAIL_SMTP_PORT")) if key("EMAIL_SMTP_PORT").isdigit() else 587
+EMAIL_SMTP_PORT = number("EMAIL_SMTP_PORT", 587)

@@ -38,6 +38,7 @@ touch:
 | `INPUT_MODE` | `voice` or `text` (text never touches the microphone) |
 | `MIC_BACKEND`, `MIC_DEVICE` | `auto`, `sounddevice` or `winmm`; pick a specific microphone by part of its name |
 | `TTS_ENABLED`, `TTS_VOICE` | Turn the spoken voice off (replies stay on screen), or choose a Windows voice such as Zira |
+| `TTS_VOLUME`, `TTS_RATE` | Voice volume (0 to 100) and speed (-10 slower to 10 faster) |
 | `STARTUP_GREETING` | `short` (one sentence), `full` (adds weather, time table, to-do list, low battery) or `silent` |
 | `GUI_ANIMATIONS` | `false` gives still pictures in the window on a slow PC |
 | `ANTHROPIC_API_KEY` | Optional. With it Jarvis uses Claude; without it, the free command understanding below |
@@ -74,11 +75,11 @@ JarvisAdvancedBot/
   LocalBrain.py               the free brain: patterns -> tools. Order matters, see its header
   JarvisAiBrain.py            the Claude brain: the same tools, chosen by Claude
 microphone.py, winmm_mic.py   voice input: sounddevice, with a built-in Windows fallback; no PyAudio
-speech.py                     the one place Jarvis speaks (and prints, so sound-off still works)
+speech.py                     the one place Jarvis speaks, through Windows' own voice (and prints, so sound-off still works)
 gui/                          the PyQt5 window, the unlock dialog, and the CustomTkinter tools
 calc.py, rates.py             arithmetic and exchange rates, shared by the tools and the windows
 DataBase/                     your notes, tasks, books, screenshots, face model, sounds
-tests/                        411 offline tests
+tests/                        offline tests (no microphone, speaker, network, camera or email needed)
 ```
 
 Add a new ability by writing a tool in `JarvisAdvancedBot/tools/` (a function with a docstring and the `@beta_tool`
@@ -98,7 +99,9 @@ Web services change. If a tool starts failing, `tests/live_check.py` shows which
 
 * **"It prints a prompt and exits"** when run from VS Code's Run button: `Startup.py` needs a real terminal. Use
   `python JarvisGUI.py`, or open a terminal with Ctrl+`.
-* **No sound / wrong voice:** `TTS_ENABLED=false` for text only; `TTS_VOICE=Zira` to pick a voice.
+* **No sound, or it stops talking:** run `python speech.py`. It says three sentences and tells you if any came back
+  too fast to have been spoken. Also check the Windows volume and output device. `TTS_ENABLED=false` gives text only;
+  `TTS_VOICE=Zira` picks a voice.
   `DataBase/Voices/*.reg` are optional registry files (run as administrator) that make Microsoft's Heera, Mark and
   Ravi voices available.
 * **NASA says "too many times this hour":** put a free personal key from api.nasa.gov in `NASA_API_KEY`.

@@ -137,7 +137,7 @@ def remove_task(number: int, date: str = "") -> str:
 # ---------------------------------------------------------------- reminders
 
 def _ring(message):
-    print(f"\n: Reminder: {message}")
+    """A reminder is due: show a notification, play the alarm, then say what it is for."""
     try:
         from plyer import notification
         notification.notify(title="Jarvis reminder", message=message, timeout=15)
@@ -145,9 +145,11 @@ def _ring(message):
         pass
     try:
         from sound_player import playsound
-        playsound(_common.DB / "Sounds" / "1.mp3")
+        playsound(config.BASE_DIR / "DataBase" / "Sounds" / "1.mp3")
     except Exception:
         pass
+    from speech import Speak                                  # also prints it, and shows it in the window's conversation
+    Speak(message if message.lower().startswith(("your ", "wake up", "reminder")) else f"Reminder: {message}")
 
 
 @beta_tool

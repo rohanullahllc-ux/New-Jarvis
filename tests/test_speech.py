@@ -1,7 +1,12 @@
-"""Tests for speech.py:  python -m unittest tests.test_speech -v"""
+"""Tests for speech.py:  python -m unittest tests.test_speech -v
+
+Most use a stand-in Windows voice. The last class speaks through the real Windows voice at volume 0 (silent,
+but it still takes as long as the speech would) to prove that EVERY sentence is spoken, not just the first.
+"""
 import io
 import sys
 import threading
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -12,89 +17,123 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import speech  # noqa: E402
 
 
-class FakeEngine:
+class FakeToken:
+    def __init__(self, description):
+        self.description = description
+
+    def GetDescription(self):
+        return self.description
+
+
+class FakeVoice:
+    """Enough of Windows' SpVoice for speech.py."""
     created = 0
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self):
         type(self).created += 1
-        self.said, self.props = [], {}
+        self.spoken = []
+        self.Rate, self.Volume = 0, 100
+        self.Voice = FakeToken("Microsoft David Desktop - English (United States)")
+        self.tokens = [self.Voice, FakeToken("Microsoft Zira Desktop - English (United States)")]
 
-    def getProperty(self, name):
-        return [mock.Mock(id="voice-1", name="Voice One"), mock.Mock(id="voice-2", name="Voice Two")]
+    def GetVoices(self):
+        return self.tokens
 
-    def setProperty(self, name, value):
-        self.props[name] = value
-
-    def say(self, text):
-        self.said.append(text)
-
-    def runAndWait(self):
-        pass
+    def Speak(self, text, flags):
+        self.spoken.append((text, flags, self.Rate))
 
 
 class SpeakTests(unittest.TestCase):
     def setUp(self):
         speech._local = threading.local()
         speech._listeners.clear()
-        FakeEngine.created = 0
+        speech._reported.clear()
+        FakeVoice.created = 0
 
-    def speak(self, text, enabled=True):
+    def speak(self, text, enabled=True, voice_class=FakeVoice):
         out = io.StringIO()
-        with mock.patch.object(speech, "TTS_ENABLED", enabled), \
-                mock.patch("pyttsx3.engine.Engine", FakeEngine), redirect_stdout(out):
+        with mock.patch.object(speech, "TTS_ENABLED", enabled), mock.patch.object(speech, "_create_voice", voice_class), \
+                redirect_stdout(out):
             speech.Speak(text)
         return out.getvalue()
 
     def test_text_is_always_printed(self):
         self.assertIn("A.I : Hello sir", self.speak("Hello sir"))
 
-    def test_voice_off_never_creates_a_speech_engine(self):
+    def test_voice_off_never_creates_a_voice(self):
         self.speak("Hello", enabled=False)
-        self.assertEqual(FakeEngine.created, 0)
+        self.assertEqual(FakeVoice.created, 0)
 
     def test_empty_text_is_ignored(self):
         self.assertEqual(self.speak("   ").strip(), "")
-        self.assertEqual(FakeEngine.created, 0)
+        self.assertEqual(FakeVoice.created, 0)
+
+    def test_every_sentence_is_spoken_not_just_the_first(self):
+        """pyttsx3 spoke the greeting and then stayed silent for the rest of the session."""
+        for sentence in ("First.", "Second sentence.", "Third one, a little longer than the others, so it speeds up."):
+            self.speak(sentence)
+        voice = speech._local.voice
+        self.assertEqual([text for text, _, _ in voice.spoken], ["First.", "Second sentence.",
+                                                                 "Third one, a little longer than the others, so it speeds up."])
+        self.assertEqual({flags for _, flags, _ in voice.spoken}, {0})           # 0 = wait until it has been said
+        self.assertEqual(FakeVoice.created, 1)                                   # one voice, reused
 
     def test_long_sentences_are_spoken_faster_than_short_ones(self):
         self.speak("Hi")
-        engine = speech._local.engine
-        self.assertEqual(engine.props["rate"], 170)
         self.speak("This is a much longer sentence that goes well past thirty characters.")
-        self.assertEqual(engine.props["rate"], 200)
-        self.assertEqual(engine.said[0], "Hi")
+        rates = [rate for _, _, rate in speech._local.voice.spoken]
+        self.assertEqual(rates, [0, 2])
 
-    def test_the_engine_is_created_once_per_thread_and_reused(self):
+    def test_the_rate_setting_adjusts_the_speed_within_limits(self):
+        with mock.patch.object(speech, "TTS_RATE", 3):
+            self.speak("Hi")
+        self.assertEqual(speech._local.voice.spoken[0][2], 3)
+        with mock.patch.object(speech, "TTS_RATE", 50):
+            self.speak("Hi again")
+        with mock.patch.object(speech, "TTS_RATE", -50):
+            self.speak("Hi once more")
+        self.assertEqual([rate for _, _, rate in speech._local.voice.spoken[1:]], [10, -10])
+
+    def test_the_volume_setting_is_applied_within_limits(self):
+        for setting, expected in ((40, 40), (150, 100), (-5, 0)):
+            speech._local = threading.local()
+            with mock.patch.object(speech, "TTS_VOLUME", setting):
+                self.speak("Hi")
+            self.assertEqual(speech._local.voice.Volume, expected)
+
+    def test_the_voice_is_created_once_per_thread_and_reused(self):
         self.speak("one")
         self.speak("two")
-        self.assertEqual(FakeEngine.created, 1)
+        self.assertEqual(FakeVoice.created, 1)
 
-    def test_each_thread_gets_its_own_engine(self):
-        engines = []
+    def test_each_thread_gets_its_own_voice(self):
+        voices = []
 
         def work():
             self.speak("from a worker thread")
-            engines.append(speech._local.engine)
+            voices.append(speech._local.voice)
 
         self.speak("from the main thread")
         thread = threading.Thread(target=work)
         thread.start()
         thread.join()
-        self.assertEqual(FakeEngine.created, 2)
-        self.assertIsNot(engines[0], speech._local.engine)
+        self.assertEqual(FakeVoice.created, 2)
+        self.assertIsNot(voices[0], speech._local.voice)
 
-    def test_a_broken_voice_does_not_crash_and_is_retried_fresh_next_time(self):
-        class Broken(FakeEngine):
-            def runAndWait(self):
-                raise RuntimeError("SAPI exploded")
+    def test_a_broken_voice_does_not_crash_is_reported_once_and_is_retried_fresh(self):
+        class Broken(FakeVoice):
+            def Speak(self, text, flags):
+                raise OSError("SAPI exploded")
 
-        out = io.StringIO()
-        with mock.patch.object(speech, "TTS_ENABLED", True), mock.patch("pyttsx3.engine.Engine", Broken), \
-                redirect_stdout(out):
-            speech.Speak("still shown")                    # must not raise
-        self.assertIn("still shown", out.getvalue())
-        self.assertIn("voice is unavailable", out.getvalue())
-        self.assertIsNone(speech._local.engine)            # the broken engine is dropped
+        output = self.speak("still shown", voice_class=Broken)                  # must not raise
+        self.assertIn("still shown", output)
+        self.assertIn("voice is unavailable - SAPI exploded", output)
+        self.assertFalse(hasattr(speech._local, "voice") and speech._local.voice)   # the broken voice is dropped
+        second = self.speak("shown again", voice_class=Broken)
+        self.assertIn("shown again", second)
+        self.assertNotIn("voice is unavailable", second)                        # the same problem is not repeated
+        self.speak("recovered")                                                 # a healthy voice works afterwards
+        self.assertEqual(speech._local.voice.spoken[-1][0], "recovered")
 
     def test_listeners_see_every_line_and_a_faulty_one_cannot_stop_speech(self):
         seen = []
@@ -108,10 +147,21 @@ class SpeakTests(unittest.TestCase):
         output = self.speak("Reply for the GUI")
         self.assertEqual(seen, ["Reply for the GUI"])
         self.assertIn("listener failed", output)
+        self.assertEqual(speech._local.voice.spoken[0][0], "Reply for the GUI")
         speech.remove_listener(seen.append)
         speech.remove_listener(faulty)
         self.speak("Not seen")
         self.assertEqual(seen, ["Reply for the GUI"])
+
+    def test_the_configured_voice_is_chosen_by_name_fragment(self):
+        with mock.patch.object(speech, "TTS_VOICE", "zira"), mock.patch.object(speech, "_create_voice", FakeVoice):
+            voice = speech._voice()
+        self.assertIn("Zira", voice.Voice.GetDescription())
+
+    def test_an_unknown_voice_name_keeps_the_windows_default(self):
+        with mock.patch.object(speech, "TTS_VOICE", "no such voice"), mock.patch.object(speech, "_create_voice", FakeVoice):
+            voice = speech._voice()
+        self.assertIn("David", voice.Voice.GetDescription())
 
     def test_text_the_console_cannot_display_is_degraded_not_fatal(self):
         raw = io.BytesIO()
@@ -123,19 +173,93 @@ class SpeakTests(unittest.TestCase):
         self.assertIn("In Urdu that is", shown)
         self.assertIn("?", shown)
 
-    def test_the_configured_voice_is_chosen_by_name_fragment(self):
-        voices = [mock.Mock(id="a", **{"name": "Microsoft David"}), mock.Mock(id="b", **{"name": "Microsoft Zira"})]
-        # Mock(name=...) sets the mock's repr name, so assign the attribute explicitly
-        for voice, label in zip(voices, ("Microsoft David", "Microsoft Zira")):
-            voice.name = label
 
-        class WithVoices(FakeEngine):
-            def getProperty(self, name):
-                return voices
+class VoiceCheckTests(unittest.TestCase):
+    def setUp(self):
+        speech._local = threading.local()
+        speech._reported.clear()
 
-        with mock.patch.object(speech, "TTS_VOICE", "zira"), mock.patch("pyttsx3.engine.Engine", WithVoices):
-            engine = speech._engine()
-        self.assertEqual(engine.props["voice"], "b")
+    def run_check(self, clock):
+        out = io.StringIO()
+        with mock.patch.object(speech, "TTS_ENABLED", True), mock.patch.object(speech, "_create_voice", FakeVoice), \
+                mock.patch.object(speech.time, "time", side_effect=clock), redirect_stdout(out):
+            healthy = speech.check()
+        return healthy, out.getvalue()
+
+    def test_a_voice_that_takes_the_time_speech_takes_passes(self):
+        healthy, output = self.run_check([0, 5, 5, 9, 9, 12])
+        self.assertTrue(healthy)
+        self.assertIn("Jarvis can speak, and keeps speaking", output)
+
+    def test_a_voice_that_comes_back_at_once_is_reported_as_silent(self):
+        healthy, output = self.run_check([0, 4, 4, 4.01, 4.01, 4.02])          # the 2nd and 3rd "return" instantly
+        self.assertFalse(healthy)
+        self.assertEqual(output.count("came back too fast"), 2)
+        self.assertIn("Something is wrong with speech", output)
+
+    def test_a_voice_that_cannot_start_is_reported(self):
+        out = io.StringIO()
+        with mock.patch.object(speech, "TTS_ENABLED", True), mock.patch.object(speech, "_create_voice", side_effect=OSError("no SAPI")), \
+                redirect_stdout(out):
+            self.assertFalse(speech.check())
+        self.assertIn("can't be started: no SAPI", out.getvalue())
+
+    def test_a_voice_that_is_switched_off_is_not_a_failure(self):
+        out = io.StringIO()
+        with mock.patch.object(speech, "TTS_ENABLED", False), redirect_stdout(out):
+            self.assertTrue(speech.check())
+        self.assertIn("stay silent", out.getvalue())
+
+
+def sapi_available():
+    try:
+        speech._create_voice()
+        return sys.platform == "win32"
+    except Exception:
+        return False
+
+
+@unittest.skipUnless(sapi_available(), "hardware: needs Windows speech")
+class RealWindowsVoice(unittest.TestCase):
+    """Uses the real voice at volume 0: silent, but each sentence still takes as long as speaking it would."""
+
+    SENTENCES = ("Testing, one, two, three.", "A second sentence, to prove the voice keeps going.", "And a third.")
+
+    def setUp(self):
+        speech._local = threading.local()
+        speech._reported.clear()
+        patch = mock.patch.object(speech, "TTS_VOLUME", 0)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def durations(self):
+        times = []
+        for sentence in self.SENTENCES:
+            started = time.time()
+            self.assertTrue(speech._say(sentence), "the voice reported a failure")
+            times.append(time.time() - started)
+        return times
+
+    def assert_all_spoken(self, times):
+        for sentence, took in zip(self.SENTENCES, times):
+            self.assertGreaterEqual(took, len(sentence) / speech.CHECK_CHARACTERS_PER_SECOND,
+                                    f"{sentence!r} came back after {took:.2f}s: it was not spoken")
+
+    def test_every_sentence_is_spoken_on_the_main_thread(self):
+        self.assert_all_spoken(self.durations())
+
+    def test_every_sentence_is_spoken_from_a_worker_thread(self):
+        result = {}
+
+        def work():
+            speech._local = threading.local()
+            result["times"] = self.durations()
+
+        thread = threading.Thread(target=work)
+        thread.start()
+        thread.join(60)
+        self.assertIn("times", result, "the worker thread never finished speaking")
+        self.assert_all_spoken(result["times"])
 
 
 if __name__ == "__main__":

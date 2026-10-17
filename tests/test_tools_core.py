@@ -368,6 +368,32 @@ class NotesAndTasksTests(ToolCase):
         self.fails(lambda: T.set_reminder(message="x", at_time="25:00"), "HH:MM")
 
 
+class ReminderRingTests(ToolCase):
+    def ring(self, message, notification_fails=False, sound_fails=False):
+        notify = mock.Mock(side_effect=RuntimeError("no desktop") if notification_fails else None)
+        play = mock.Mock(side_effect=OSError("no sound device") if sound_fails else None)
+        modules = {"plyer": SimpleNamespace(notification=SimpleNamespace(notify=notify)),
+                   "sound_player": SimpleNamespace(playsound=play)}
+        with mock.patch.dict(sys.modules, modules), mock.patch("speech.Speak") as speak:
+            productivity._ring(message)
+        return notify, play, speak
+
+    def test_a_reminder_shows_a_notification_plays_the_alarm_and_says_what_it_is_for(self):
+        notify, play, speak = self.ring("drink water")
+        self.assertEqual(notify.call_args.kwargs["message"], "drink water")
+        self.assertTrue(str(play.call_args[0][0]).endswith("1.mp3"))
+        speak.assert_called_once_with("Reminder: drink water")
+
+    def test_messages_that_are_already_sentences_are_spoken_as_they_are(self):
+        for message in ("Your timer is done", "Wake up, sir", "Reminder"):
+            _, _, speak = self.ring(message)
+            speak.assert_called_once_with(message)
+
+    def test_a_missing_notification_or_alarm_never_stops_it_being_said(self):
+        _, _, speak = self.ring("call mum", notification_fails=True, sound_fails=True)
+        speak.assert_called_once_with("Reminder: call mum")
+
+
 class TimeTableTests(ToolCase):
     def test_the_time_table_starts_empty_with_instructions(self):
         text = T.get_timetable_block()
