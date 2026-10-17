@@ -34,7 +34,7 @@ HOME_CURRENCY = key("HOME_CURRENCY", "PKR").upper() # "dollar rate" converts to 
 
 # ---- Access ---------------------------------------------------------------
 JARVIS_PASSWORD = key("JARVIS_PASSWORD")                    # plain-text unlock password
-JARVIS_PASSWORD_SHA256 = key("JARVIS_PASSWORD_SHA256").lower()  # preferred: sha256 hex of the password (python gate.py --set-password)
+JARVIS_PASSWORD_HASH = key("JARVIS_PASSWORD_HASH")  # preferred: salted hash made by  python gate.py --set-password
 
 # ---- Voice in / out ------------------------------------------------------
 INPUT_MODE = key("INPUT_MODE", "voice").lower()     # "voice" or "text"

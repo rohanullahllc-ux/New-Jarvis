@@ -1,10 +1,10 @@
+import gate
 from MainCode import Speak
 from microphone import listen
 
 WakeWord1 = "hey jarvis"
 WakeWord2 = "wake up"
 WakeWord3 = "get up"
-PASSWORD = "python"
 
 
 def Listen():
@@ -19,7 +19,7 @@ def _start_assistant():
 
 def Pass(pass_inp):
     """Check the password, then run a best-effort face check. Returns True to grant access."""
-    if str(pass_inp).strip() != PASSWORD:
+    if not gate.check_password(pass_inp):
         Speak("Access Not Granted .")
         return False
 
@@ -28,8 +28,7 @@ def Pass(pass_inp):
     # block entry or crash (no camera, model, or OpenCV is a "skip", not a failure).
     try:
         Speak("For more confirmation I will look at the camera...")
-        from DataBase.FaceDetectionModule.FaceRecognition import FaceRocog
-        if FaceRocog():
+        if gate.face_check():
             Speak("Face confirmed. Welcome back, sir.")
         else:
             Speak("I couldn't confirm your face, but your password was correct, so I'll continue.")
