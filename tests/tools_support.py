@@ -16,6 +16,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from anthropic.lib.tools import ToolError  # noqa: E402
+import rates  # noqa: E402
 from JarvisAdvancedBot.tools import _common  # noqa: E402
 
 
@@ -83,6 +84,7 @@ class ToolCase(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
         _common.clear_cache()
+        rates._cache.clear()
 
     def fails(self, call, *fragments):
         """Assert the tool raises ToolError containing every fragment; returns the message."""

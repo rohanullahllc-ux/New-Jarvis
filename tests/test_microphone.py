@@ -72,8 +72,9 @@ class PyAudioIsGone(unittest.TestCase):
                 self.assertIn(microphone._active, microphone.BACKENDS)
 
     def test_requirements_do_not_ask_for_pyaudio(self):
-        text = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text(encoding="utf-8")
-        self.assertNotIn("pyaudio", text.lower().replace("pyaudiowpatch", ""))
+        lines = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        requirements = [line.split("#")[0].strip().lower() for line in lines]          # comments may mention it
+        self.assertFalse([line for line in requirements if "pyaudio" in line.replace("pyaudiowpatch", "")], requirements)
 
 
 @unittest.skipUnless(HAS_MIC, "hardware: needs a microphone")
@@ -170,17 +171,35 @@ class FailoverAndFallback(unittest.TestCase):
                 mock.patch.object(microphone, "_typed_hint_shown", True), \
                 mock.patch("builtins.print") as printed:
             result = microphone.listen()
-        self.assertEqual(result, "hey jarvis")
+        self.assertEqual(result, "Hey Jarvis")                 # typed words keep their capitals
         self.assertTrue(microphone._text_mode)
         output = " ".join(str(call.args[0]) for call in printed.call_args_list if call.args)
         self.assertIn("python microphone.py", output)      # the user is told how to diagnose it
+
+    def test_voice_only_listening_never_falls_back_to_the_keyboard(self):
+        """The GUI has no console: a dead microphone must be an error it can show, not input()."""
+        with mock.patch.dict(microphone.BACKENDS, {"sounddevice": DeadBackend, "winmm": DeadBackend}),                 mock.patch.object(builtins, "input", side_effect=AssertionError("asked the keyboard")),                 mock.patch.object(microphone, "_type_prompt", side_effect=AssertionError("asked the keyboard")),                 mock.patch("builtins.print"):
+            with self.assertRaises(microphone.MicrophoneError) as caught:
+                microphone.listen_voice()
+        self.assertIn("microphone", str(caught.exception))
+        self.assertFalse(microphone._text_mode)
+
+    def test_voice_only_listening_works_even_when_typed_mode_is_on(self):
+        """The GUI's push-to-talk button must still hear you when INPUT_MODE=text."""
+        with mock.patch.object(microphone, "_text_mode", True),                 mock.patch.object(microphone, "_hear", return_value="open chrome") as hear:
+            self.assertEqual(microphone.listen_voice(timeout=3), "open chrome")
+        hear.assert_called_once_with(microphone.LANGUAGE, 3, 8)
+
+    def test_voice_only_listening_reports_silence_as_an_empty_string(self):
+        with mock.patch.object(microphone, "_hear", return_value=None):
+            self.assertEqual(microphone.listen_voice(), "")
 
     def test_text_mode_never_touches_audio_hardware(self):
         with mock.patch.object(microphone, "_text_mode", True), \
                 mock.patch.object(microphone, "_typed_hint_shown", True), \
                 mock.patch.object(builtins, "input", return_value="  Time  "), \
                 mock.patch.object(microphone, "_select_backend", side_effect=AssertionError("touched audio")):
-            self.assertEqual(microphone.listen(), "time")
+            self.assertEqual(microphone.listen(), "Time")
 
 
 if __name__ == "__main__":

@@ -44,6 +44,7 @@ MIC_DEVICE = key("MIC_DEVICE")                      # blank = Windows default; o
 TTS_ENABLED = flag("TTS_ENABLED", True)             # false = Jarvis answers in text only (much faster)
 TTS_VOICE = key("TTS_VOICE")                        # part of a Windows voice name, e.g. Zira; blank = the first installed voice
 STARTUP_GREETING = key("STARTUP_GREETING", "short").lower()  # short | full | silent
+GUI_ANIMATIONS = flag("GUI_ANIMATIONS", True)       # false = still pictures in the window (lighter on a slow PC)
 
 # ---- AI brain (optional) --------------------------------------------------
 ANTHROPIC_API_KEY = key("ANTHROPIC_API_KEY")

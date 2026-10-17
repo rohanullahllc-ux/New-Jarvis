@@ -1,30 +1,38 @@
-python-dotenv
-requests
-beautifulsoup4
-psutil
-pyttsx3
-SpeechRecognition
-sounddevice>=0.5.6,<0.6        # PortAudio is bundled inside this wheel
-cffi>=2.1.1,<3                 # sounddevice's only compiled dependency (has a cp314 wheel)
-PyQt5
-wolframalpha
-wikipedia
-pywhatkit
-plyer
-colored
-pyautogui
-keyboard
-pynput
-PyPDF2
-instaloader
-deep-translator
-pygame-ce
-pause
-geopy
-geocoder
-pywikihow
-pytube
-Pillow
-anthropic
-opencv-contrib-python
+# New Jarvis - Windows, Python 3.14:   pip install -r requirements.txt
+# Every package below is imported by the project, and nothing else is needed.
+
+# ---- Settings and the two brains
+python-dotenv>=1.0
+requests>=2.32
+anthropic>=1.15                 # the tools use its decorator; Claude itself is only called when ANTHROPIC_API_KEY is set
+
+# ---- Voice in and out. There is deliberately no PyAudio: it has no Python 3.14 wheel.
+SpeechRecognition>=3.14
+audioop-lts>=0.2.1; python_version >= "3.13"
+sounddevice>=0.5.6,<0.6         # PortAudio is bundled inside this wheel
+cffi>=2.1.1,<3                  # sounddevice's only compiled dependency (it has a cp314 wheel)
+pyttsx3>=2.99
+pygame-ce>=2.5                  # plays the reminder sound and the theme music
+
+# ---- Controlling and reading this PC
+psutil>=5.9
+keyboard>=0.13.5
+pynput>=1.7
+pyautogui>=0.9.54
+plyer>=2.1                      # desktop notifications for reminders
+
+# ---- Features
+pywhatkit>=5.4                  # plays a YouTube video
+deep-translator>=1.9
+pypdf>=5.0                      # reads PDF books
+yt-dlp                          # downloads YouTube videos; update it with: pip install -U yt-dlp
+instaloader>=4.14
+
+# ---- Face check after the password (optional: without it Jarvis says it couldn't confirm your face)
+opencv-contrib-python>=4.9
 numpy
+
+# ---- The window and its small tools
+PyQt5>=5.15
+customtkinter>=5.2
+Pillow>=10

@@ -66,7 +66,7 @@ def run():
     print("\n: Jarvis is asleep. Say or type a wake word to start: "
           + ", ".join(f"'{w}'" for w in WAKE_WORDS) + ". Say or type 'quit' to exit.\n")
     while True:
-        heard = listen()
+        heard = listen().lower()
         if any(word in heard for word in WAKE_WORDS):
             if not authenticate():
                 continue

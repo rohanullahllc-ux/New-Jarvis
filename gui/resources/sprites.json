@@ -1,0 +1,32 @@
+{
+  "ring": {
+    "file": "ring.png",
+    "frames": 20,
+    "columns": 10,
+    "size": [
+      240,
+      240
+    ],
+    "frame_ms": 200
+  },
+  "earth": {
+    "file": "earth.png",
+    "frames": 72,
+    "columns": 10,
+    "size": [
+      220,
+      165
+    ],
+    "frame_ms": 144
+  },
+  "hero": {
+    "file": "hero.png",
+    "frames": 30,
+    "columns": 5,
+    "size": [
+      480,
+      300
+    ],
+    "frame_ms": 70
+  }
+}

@@ -38,7 +38,7 @@ def handle_command(query, ask=None):
     from JarvisAdvancedBot.JarvisAiBrain import ReplyBrain, ResetBrain, ai_available
     from JarvisAdvancedBot.LocalBrain import LocalReply
     ask = ask or ask_user
-    command = query.replace("jarvis", "").strip()
+    command = query.lower().replace("jarvis", "").strip()
 
     if len(query) < 3:
         return None

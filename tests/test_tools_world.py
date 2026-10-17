@@ -7,8 +7,6 @@ from contextlib import redirect_stdout
 from types import ModuleType, SimpleNamespace
 from unittest import mock
 
-import requests
-
 from tests.tools_support import FakeResponse, ToolCase
 
 from anthropic.lib.tools import ToolError  # noqa: E402

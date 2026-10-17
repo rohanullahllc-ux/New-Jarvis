@@ -4,8 +4,6 @@ import time
 import unittest
 from unittest import mock
 
-import requests
-
 from tests.tools_support import FakeResponse, ToolCase
 
 from JarvisAdvancedBot import tools as T  # noqa: E402

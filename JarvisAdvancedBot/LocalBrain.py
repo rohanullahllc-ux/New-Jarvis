@@ -8,10 +8,7 @@ ORDER MATTERS. A specific command must come before the broader one it would othe
 for ("open downloads" before "open <app>", "temperature of Mars" before "temperature" = weather), and
 the Wikipedia catch-all stays last.
 """
-import ast
 import datetime
-import math
-import operator
 import random
 import re
 import threading
@@ -20,6 +17,7 @@ import traceback
 import psutil
 from anthropic.lib.tools import ToolError
 
+import calc
 import config
 from config import DEFAULT_CITY, HOME_CURRENCY
 from JarvisAdvancedBot import tools as T
@@ -198,7 +196,7 @@ def reminder(m, ask):
     if not minutes and not clock:
         if text.startswith("remind me to"):
             return T.add_task(message) + ". I've put it on your to-do list."
-        answer = ask("When should it go off? For example, in ten minutes, or at seven thirty p m.")
+        answer = ask("When should it go off? For example, in ten minutes, or at seven thirty p m.").lower()
         minutes, clock = _duration_minutes("in " + answer), _clock_time("at " + answer)
     if minutes:
         return T.set_reminder(message=message, minutes_from_now=minutes)
@@ -434,9 +432,6 @@ def youtube_play(m, ask):
 
 # ---------------------------------------------------------------- maths
 
-OPERATORS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
-             ast.Pow: operator.pow, ast.Mod: operator.mod, ast.USub: operator.neg, ast.UAdd: operator.pos}
-
 MATH_WORDS = [
     (r"(?<=\d),(?=\d{3})", ""), (r"(\d+(?:\.\d+)?)\s*(?:%|percent) of\b", r"(\1/100)*"),
     (r"(\d+(?:\.\d+)?)\s*(?:%|percent)", r"(\1/100)"), (r"\bsquare root of\s*(\d+(?:\.\d+)?)", r"sqrt(\1)"),
@@ -444,21 +439,6 @@ MATH_WORDS = [
     (r"\bplus\b", "+"), (r"\bminus\b", "-"), (r"\bto the power of\b|\bpower\b|\^", "**"),
     (r"\bsquared\b", "**2"), (r"\bcubed\b", "**3"),
 ]
-
-
-def _evaluate(node):
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-        return node.value
-    if isinstance(node, ast.BinOp) and type(node.op) in OPERATORS:
-        left, right = _evaluate(node.left), _evaluate(node.right)
-        if isinstance(node.op, ast.Pow) and abs(right) > 100:
-            raise ValueError("exponent too large")
-        return OPERATORS[type(node.op)](left, right)
-    if isinstance(node, ast.UnaryOp) and type(node.op) in OPERATORS:
-        return OPERATORS[type(node.op)](_evaluate(node.operand))
-    if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "sqrt" and len(node.args) == 1:
-        return math.sqrt(_evaluate(node.args[0]))
-    raise ValueError("not plain arithmetic")
 
 
 @intent(r"^(?:calculate|compute|solve|what(?:'?s| is)|how much is)\s+(?P<expr>(?:square root of |-|\()?\d.*)$",
@@ -469,8 +449,8 @@ def calculate(m, ask):
     for pattern, replacement in MATH_WORDS:
         expr = re.sub(pattern, replacement, expr)
     try:
-        value = _evaluate(ast.parse(expr.strip(), mode="eval").body)
-    except (SyntaxError, ValueError, ZeroDivisionError, OverflowError):
+        value = calc.evaluate(expr)
+    except ValueError:
         return None  # not a sum (e.g. "100 dollars in rupees"); let another intent try
     value = round(value, 6)
     return f"That's {int(value) if value == int(value) else value:,}."

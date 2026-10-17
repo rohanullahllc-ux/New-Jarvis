@@ -12,6 +12,7 @@ import psutil
 from anthropic import beta_tool
 from anthropic.lib.tools import ToolError
 
+import rates
 from ._common import get_json, get_text, money, open_url
 
 
@@ -114,11 +115,11 @@ def convert_currency(amount: float, from_currency: str, to_currency: str) -> str
         from_currency: Three-letter code of the currency you have, e.g. "USD".
         to_currency: Three-letter code to convert into, e.g. "PKR".
     """
-    data = get_json(f"https://open.er-api.com/v6/latest/{from_currency.upper()}")
-    rate = data.get("rates", {}).get(to_currency.upper())
-    if data.get("result") != "success" or rate is None:
-        raise ToolError(f"I couldn't get a rate from {from_currency} to {to_currency}.")
-    return f"{money(amount, from_currency)} is {money(amount * rate, to_currency)}."
+    try:
+        converted = rates.convert(amount, from_currency, to_currency)
+    except rates.RateError as error:
+        raise ToolError(str(error)) from None
+    return f"{money(amount, from_currency)} is {money(converted, to_currency)}."
 
 
 def _my_position():

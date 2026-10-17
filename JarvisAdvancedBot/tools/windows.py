@@ -4,7 +4,6 @@ import datetime
 import os
 import re
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Literal
@@ -13,7 +12,7 @@ import psutil
 from anthropic import beta_tool
 from anthropic.lib.tools import ToolError
 
-from config import BASE_DIR
+from gui.utils import launcher
 from ._common import folder, safe_filename
 
 PROTECTED_PROCESSES = {"explorer", "svchost", "csrss", "winlogon", "lsass", "services", "smss", "wininit",
@@ -199,24 +198,17 @@ def open_folder(location: str) -> str:
     return f"Opened {path}"
 
 
-UTILITIES = {"calculator": "calculator.py", "calendar": "calendar_view.py", "currency_converter": "currency_converter.py"}
-
-
 @beta_tool
 def open_utility_app(name: Literal["calculator", "calendar", "currency_converter"]) -> str:
-    """Open one of Jarvis's own small windows: a calculator, a year calendar, or a currency converter.
+    """Open one of Jarvis's own small windows: a calculator, a month calendar, or a currency converter.
 
     Args:
         name: calculator, calendar or currency_converter.
     """
-    script = BASE_DIR / "gui" / "utils" / UTILITIES[name]
-    if not script.exists():
-        raise ToolError(f"The {name.replace('_', ' ')} window isn't installed.")
-    windowless = Path(sys.executable).with_name("pythonw.exe")       # no console window behind a GUI
-    interpreter = windowless if windowless.exists() else Path(sys.executable)
-    env = {**os.environ, "PYTHONPATH": str(BASE_DIR)}
-    subprocess.Popen([str(interpreter), str(script)], cwd=str(BASE_DIR), env=env,
-                     creationflags=getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    try:
+        launcher.launch(name)
+    except FileNotFoundError as error:
+        raise ToolError(str(error)) from None
     return f"Opened the {name.replace('_', ' ')}."
 
 

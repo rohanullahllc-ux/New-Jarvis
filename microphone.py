@@ -265,7 +265,7 @@ def _type_prompt():
         print(": Typed mode. Type a command and press Enter. Type 'quit' to stop Jarvis.")
         _typed_hint_shown = True
     try:
-        return input("You (type): ").strip().lower()
+        return input("You (type): ").strip()
     except EOFError:
         print("\n: Keyboard input closed, so I'm stopping. Run 'python Startup.py' in a terminal to type to me.")
         raise SystemExit(0)
@@ -325,14 +325,18 @@ def _ensure_ready():
     return False
 
 
-def listen(language=LANGUAGE, timeout=10, phrase_time_limit=8):
-    """Return one spoken (or typed) phrase as lowercase text, or "" if nothing was understood."""
-    global _unheard
-    if not _text_mode and not _ensure_ready():
-        return _switch_to_typing("The microphone isn't working.")
-    if _text_mode:
-        return _type_prompt()
+class _VoiceUnavailable(Exception):
+    """Voice input can't be used right now; the message says why."""
 
+
+def _hear(language, timeout, phrase_time_limit):
+    """One attempt to hear a phrase by voice.
+
+    Returns the lowercase words, None if nothing was understood, or "" if Google's speech service couldn't be
+    reached. Raises _VoiceUnavailable if the microphone itself fails.
+    """
+    if not _ensure_ready():
+        raise _VoiceUnavailable("The microphone isn't working.")
     audio = None
     for attempt in range(2):
         try:
@@ -341,22 +345,52 @@ def listen(language=LANGUAGE, timeout=10, phrase_time_limit=8):
                 audio = _recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
             break
         except sr.WaitTimeoutError:
-            return _unheard_try()
+            return None
         except (MicrophoneError, OSError) as e:
             if attempt == 0 and _failover(e):
                 continue                  # the other backend works: try the same listen again
-            return _switch_to_typing(f"The microphone stopped working ({e}).")
+            raise _VoiceUnavailable(f"The microphone stopped working ({e}).") from None
     try:
         print(": Recognizing.....")
         query = _recognizer.recognize_google(audio, language=language)
     except sr.UnknownValueError:
-        return _unheard_try()
+        return None
     except sr.RequestError as e:
         print(f": Speech service unavailable, check your internet ({e})")
         return ""
-    _unheard = 0
     print(f": You Said: {query}")
     return query.lower()
+
+
+def listen(language=LANGUAGE, timeout=10, phrase_time_limit=8):
+    """Return one spoken or typed phrase, or "" if nothing was understood.
+
+    Spoken phrases come back lowercase; typed ones keep the capitals they were typed with.
+    """
+    global _unheard
+    if _text_mode:
+        return _type_prompt()
+    try:
+        heard = _hear(language, timeout, phrase_time_limit)
+    except _VoiceUnavailable as e:
+        return _switch_to_typing(str(e))
+    if heard is None:
+        return _unheard_try()
+    if heard:
+        _unheard = 0
+    return heard
+
+
+def listen_voice(language=LANGUAGE, timeout=10, phrase_time_limit=8):
+    """Listen once by voice and never touch the keyboard (the GUI has no console to type into).
+
+    Returns the lowercase words, or "" if nothing was understood. Raises MicrophoneError if the
+    microphone cannot be used.
+    """
+    try:
+        return _hear(language, timeout, phrase_time_limit) or ""
+    except _VoiceUnavailable as e:
+        raise MicrophoneError(str(e)) from None
 
 
 # ---------------------------------------------------------------- health check

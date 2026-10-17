@@ -309,8 +309,15 @@ class WindowsTests(ToolCase):
             self.assertEqual(T.take_screenshot(name="my:shot?"), "Saved the screenshot as myshot.png")
         image.save.assert_called_once_with(self.db / "ScreenShot" / "myshot.png")
 
+    def test_utility_windows_open_through_the_shared_launcher(self):
+        with mock.patch("subprocess.Popen") as popen:
+            self.assertEqual(T.open_utility_app(name="currency_converter"), "Opened the currency converter.")
+        command = popen.call_args[0][0]
+        self.assertTrue(command[1].endswith("currency_converter.py"))
+        self.assertEqual(popen.call_args[1]["env"]["PYTHONPATH"], str(windows.launcher.BASE_DIR))
+
     def test_utility_windows_report_when_they_are_missing(self):
-        with mock.patch.object(windows, "BASE_DIR", self.db):
+        with mock.patch.dict(windows.launcher.UTILITIES, {"calculator": "no_such_window.py"}):
             self.fails(lambda: T.open_utility_app(name="calculator"), "isn't installed")
 
 
