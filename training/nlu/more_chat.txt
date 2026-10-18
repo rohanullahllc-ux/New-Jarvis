@@ -1,0 +1,220 @@
+# A second round of sentences that are NOT commands, aimed at the places where the first model confused chat with a command.
+# See talk.txt for how this file is used.
+
+## chat
+# ---- feelings and personal chat (not "bored", not "how are you")
+i'm feeling tired
+i am feeling anxious
+i'm feeling happy today
+i'm feeling sick
+i feel sad
+i'm feeling lazy
+i feel stressed out
+i'm feeling unwell
+feeling down today
+i'm not feeling well
+i feel like crying
+i feel really motivated today
+i'm so excited about tomorrow
+i'm tired of studying
+i don't feel like doing anything
+i'm scared about my results
+i am so proud of my sister
+my head hurts what should i do
+i have a headache
+i can't concentrate
+i keep forgetting things
+i'm worried about my friend
+i had a fight with my friend
+my brother is annoying me
+# ---- about the assistant, as chat
+are you lonely
+are you a good listener
+are you made of code
+are you able to dream
+are you afraid of being turned off
+are you alive
+are you conscious
+are you older than me
+are you better than other assistants
+are you free to use
+are you always listening
+do you know how to sing
+do you speak urdu
+do you speak other languages
+do you have a family
+do you have friends
+do you have a favourite number
+do you ever make mistakes
+do you learn from our chats
+do you get sad
+what do you like to do
+what do you dream about
+what makes you laugh
+what are you afraid of
+what language are you written in
+what is your favourite subject
+what is the hardest question you have been asked
+how old are you
+how smart are you
+how fast can you think
+how were you made
+how do you work inside
+how does your brain work
+why were you named jarvis
+why do you speak so politely
+why are you called an assistant
+# ---- travel, places, what to do
+what are some fun things to do in karachi
+what are some places to visit in lahore
+what are the best places to visit in pakistan
+where should i go for a holiday
+where is the best place to eat in peshawar
+what is the best time to visit swat
+how do i get from lahore to islamabad
+how long does it take to drive from karachi to lahore
+is it safe to travel to northern pakistan in winter
+what should i pack for a trip to the mountains
+what is the best season for hiking
+# ---- what time does something happen (not the time)
+what time does the library open
+what time does the sun rise tomorrow
+what time does the sun rise in karachi
+what time do shops close on friday
+what time does the match start
+what time does the train leave
+what time does ramadan start this year
+what time do the prayers start
+what time is the eclipse
+what time zone does pakistan use
+# ---- how does something work, why, who invented
+how does a car work
+how does a plane fly
+how does the human eye work
+how does a camera work
+how does a calculator work
+how does a calendar work
+how does a vaccine work
+how does a search engine work
+how does wifi reach my phone
+how does a smartphone work
+how does a refrigerator keep food cold
+how does a washing machine work
+how does a clock work
+how does the heart work
+how does lightning happen
+who invented the computer
+who invented the airplane
+who invented the internet
+who invented the radio
+who invented the camera
+who invented football
+who invented chess
+who invented the alphabet
+who invented paper
+who built the pyramids
+who built the taj mahal
+who built the great wall
+who designed the eiffel tower
+who wrote the quran in english translation
+who wrote the lord of the rings
+who wrote pride and prejudice
+who owns amazon
+who owns google
+who coded the first video game
+who trained the first neural network
+who made the first phone call
+# ---- computers and phones, troubleshooting (not status checks)
+why does my wifi drop every evening
+how do i connect to wifi on my laptop
+how do i find my wifi password
+how do i change my wifi name
+how do i speed up my internet
+how do i fix a slow internet connection
+how do i check my internet speed
+my internet is very slow what can i do
+my laptop gets hot what should i do
+my laptop battery does not last long how can i fix it
+how can i make my laptop battery last longer
+how do i replace a laptop battery
+how do i upgrade my ram
+how do i check how much ram my phone has
+how do i see my storage on an iphone
+how do i clear space on my phone
+how do i find my ip address on a mac
+how do i find out what processor i have on linux
+how do i update windows
+how do i factory reset my laptop
+how do i add a calendar event on my phone
+how do i use the calculator on my phone
+how do i set an alarm on my phone
+# ---- words that look like a command
+what does the word screenshot mean
+what is the meaning of the word note
+what is a weather balloon
+what is a weather vane
+how do meteorologists predict the weather
+why is the weather so unpredictable
+who was the first person to predict the weather
+what is the cpu of the first computer
+what was the first calculator
+who made the first calendar
+what is the history of the calendar
+what is a leap year calendar
+how many days does a lunar calendar have
+when was the first mute button invented
+what is the loudest sound ever recorded
+what is the quietest place on earth
+how loud is a jet engine
+how many decibels is a normal conversation
+what does pause mean in music
+what is a pause in writing
+what is a bored expression
+why do people get bored
+what is boredom good for
+is boredom bad for you
+what is an interesting hobby to start
+what is a good habit to build
+what is the best way to relax after work
+give me tips to stop being bored
+suggest a hobby for a student
+tell me a story about a dog
+write a poem about a dog
+what is the best dog food
+how many dogs are there in the world
+how long does a dog pregnancy last
+# ---- how are things / greetings used as part of a longer request
+hello can you help me with my essay
+hi i need help with my homework
+hey jarvis can you explain photosynthesis
+good morning can you tell me why the sky is blue
+hello i have a question about history
+hi can you write a poem
+hey what do you think about space travel
+good evening tell me a story about a king
+thanks for the explanation can you give an example
+thank you now explain it more simply
+thanks can you also tell me about mars
+# ---- general chat
+tell me something about the moon landing
+talk to me
+say something interesting about space
+keep talking
+go on
+tell me more
+tell me more about that
+can you explain that again
+what do you mean
+i don't understand
+can you give me an example
+can you say that in simpler words
+what was that
+repeat that please
+why
+really
+is that true
+are you sure
+that's interesting
+i see
+okay then
+interesting

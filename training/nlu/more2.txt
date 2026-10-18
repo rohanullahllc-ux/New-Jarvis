@@ -1,0 +1,290 @@
+# A third round of phrases, mostly for small talk (greetings, thanks, names) and the volume and weather words that were mixed up.
+# See talk.txt for how this file is used.
+
+## greet
+hiya jarvis
+sup jarvis
+what's up jarvis
+heya
+hey there jarvis
+hi there buddy
+well hello
+hello again jarvis
+yo yo
+oi
+namaste
+hello sir
+hey sir
+good afternoon jarvis
+good afternoon sir
+good morning sir
+good evening sir
+hi jarvis are you there
+hi are you there
+good to have you here
+oh hello
+ahoy
+hey stranger
+hello old friend
+hello jarvis how do you do
+
+## how_are_you
+how's it going buddy
+how is it going today
+how's everything going
+how are you doing today jarvis
+how do you do jarvis
+how's life treating you
+how have you been lately
+long time no see how are you
+what's new with you
+how's your health
+how are you feeling today jarvis
+how's it going jarvis
+how goes it
+how are you getting along
+and how are you
+and how are you today
+how are you my friend
+how are you buddy
+how is everything with you today
+
+## thanks
+you rock
+you're amazing
+you are the best assistant
+you're brilliant
+that's wonderful
+that's wonderful thank you
+wonderful thanks
+excellent thanks
+nice thanks
+good stuff
+much obliged
+thanks so much
+thanks very much
+thanks a bunch
+thanks again
+thank you again
+thx jarvis
+tysm
+thank you sir
+thanks sir
+that's really helpful
+that's very helpful thank you
+that's just what i wanted
+just what i needed
+exactly what i wanted thanks
+super thanks
+
+## my_name
+what am i called
+what is my name jarvis
+tell me what my name is
+say my name please
+do you remember what my name is
+what name do i go by
+what's the name you know me by
+who am i to you
+can you remember my name
+you know my name right
+what do you know my name as
+what's my first name
+what is my full name
+tell me my full name
+do you recall my name
+what's my name please
+who am i jarvis
+tell me who i am jarvis
+do you know who this is
+do you know who you're talking to
+
+## who_are_you
+who invented you jarvis
+who made you jarvis
+who is the person who made you
+are you a machine
+are you software
+are you real or fake
+are you a bot
+are you a chatbot
+are you an assistant
+are you a virtual assistant
+are you human or ai
+are you a person or a machine
+are you a real person
+are you artificial intelligence
+are you a program
+what are you made of
+what kind of thing are you
+what sort of assistant are you
+which assistant are you
+
+## joke
+make me giggle
+tell me something to make me smile
+make me happy with a joke
+tell me a silly joke
+tell me a short joke
+a funny joke please
+got any jokes
+any jokes
+know a good joke
+tell me a joke about programmers
+tell me a joke about school
+cheer me up with something funny
+i could use a laugh
+i need something funny
+say something that makes me laugh
+you got any good jokes
+lighten things up with a joke
+be funny
+make me crack up
+tell me a joke to make my day
+
+## mars_photos
+latest curiosity pictures
+perseverance images
+show me what the rover sees
+what the mars rover sees
+pictures from the red planet
+photos from the red planet
+images from mars
+rover pictures
+new pictures from mars
+mars rover latest photo
+fresh photos from mars
+the newest rover photo
+what is the rover looking at on mars
+show me the latest from the mars rover
+photos sent back from mars
+
+## take_note
+add this to my notes
+put that in my notes
+save this in my notes
+write this in my notes
+add it to my notes
+store this in my notes
+put this in my notes
+put that down in my notes
+add that to my notes
+record this in my notes
+make a note of this
+make a note of that
+note this for me
+note it down
+write it down
+jot it down
+save it as a note
+write a note for me please
+i want to dictate a note
+take a note for me
+
+## weather
+is it snowing outside
+is it foggy
+is it humid
+is it stormy
+is it freezing
+is it hailing
+is it sunny today
+is it a nice day
+is it nice outside
+is it a good day for a walk
+forecast
+today's forecast
+tomorrow's forecast
+the forecast
+weekly forecast
+forecast for the week
+what is the forecast for tomorrow
+what's the forecast for this week
+is it snowing in {place}
+is it foggy in {place}
+what's the forecast for {place}
+forecast for {place} tomorrow
+
+## time
+what hour is it
+what is the hour
+tell me the hour
+time please jarvis
+what's the time jarvis please
+tell me the time please jarvis
+
+## volume_down
+the volume is too high
+volume's too high
+volume is way too high
+it's too high
+sound is too high
+the sound is too loud
+volume too loud
+volume too high
+the volume is way too loud
+it's far too loud
+it is way too loud
+
+## volume_up
+volume's too low
+the volume is too low
+volume is way too low
+volume too low
+the sound is too low
+sound is too quiet
+the volume is too quiet
+it's far too quiet
+it is way too quiet
+the sound is way too soft
+
+## battery
+is the charger plugged in
+is my charger connected
+is the charger on
+is the power cable connected
+is it plugged in
+is it charging right now
+is the charger working
+is my laptop connected to power
+is my laptop plugged into the wall
+
+## chat
+what is a screenshot used for
+what is a joke
+what is a battery
+what is a processor
+what is a hard drive
+what is a charger
+what is an adapter
+what is wifi
+what is a router
+what is a calculator
+what is a to do list used for
+what is a note taking app
+where is the eiffel tower
+where is egypt
+where is the amazon river
+where is the taj mahal
+where is k2
+where is the sahara desert
+where is antarctica
+where is the dead sea
+where is the pacific ocean
+are you listening to me all the time
+are you recording me
+are you spying on me
+do you listen to me when i'm not talking
+are you connected to the internet right now
+are you using my camera
+do you keep my data
+what do you do with my data
+do you work offline
+is it bad to sit all day
+is it healthy to drink cold water
+is it okay to skip a meal
+is it normal to forget things
+is it true that cats always land on their feet
+is it safe to eat raw eggs
+is it possible to learn two languages at once
+is it better to study at night or in the morning

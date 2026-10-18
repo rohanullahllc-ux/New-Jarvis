@@ -1,0 +1,342 @@
+# Jarvis's own small apps, the Windows ones, and the folders on this computer. See talk.txt for how this file is used.
+
+## open_calculator
+open calculator
+open the calculator
+calculator
+calc
+open calc
+open the calc
+open up the calculator
+launch calculator
+launch the calculator
+start the calculator
+start calculator
+run the calculator
+show me the calculator
+show the calculator
+bring up the calculator
+pull up the calculator
+i need a calculator
+i need the calculator
+i want to use the calculator
+i want to calculate something
+let me use the calculator
+can you open the calculator
+can you open calc
+open the calc thing
+open that calculator
+get me a calculator
+get the calculator
+give me a calculator
+use the calculator
+open your calculator
+open jarvis calculator
+jarvis calculator
+the calculator please
+calculator please
+fire up the calculator
+i want a calculator
+open a calculator
+i need to do some calculations
+let me do some calculations
+open the calculator app for me
+
+## system_calculator
+system calculator
+open the system calculator
+open windows calculator
+windows calculator
+open the default calculator
+open the real calculator
+i mean the windows calculator
+open the windows calculator app
+launch the windows calculator
+start the system calculator
+the system calculator please
+open the system one calculator
+open the microsoft calculator
+microsoft calculator
+open the calculator of windows
+open the calculator that comes with windows
+use the windows calculator
+open my system calculator
+i want the system calculator
+no the system calculator
+i told you the windows calculator
+open the built in calculator
+open the built-in calculator
+
+## open_calendar
+open calendar
+open the calendar
+calendar
+open calender
+launch the calendar
+start the calendar
+show me the calendar
+show the calendar
+bring up the calendar
+pull up the calendar
+i need the calendar
+i want to see the calendar
+let me see the calendar
+can you open the calendar
+open a calendar
+get me the calendar
+open jarvis calendar
+jarvis calendar
+the calendar please
+calendar please
+open up the calendar
+display the calendar
+i want to check the calendar
+check the calendar
+open the month calendar
+open your calendar
+open a month calendar
+show me a calendar
+i need a calendar
+let me look at the calendar
+
+## system_calendar
+system calendar
+open the system calendar
+open windows calendar
+windows calendar
+open the windows calendar app
+i mean the windows calendar
+launch the windows calendar
+start the system calendar
+the system calendar please
+open the default calendar
+open my windows calendar
+open the real calendar
+microsoft calendar
+open the microsoft calendar
+open the calendar of windows
+open the built in calendar
+open the built-in calendar
+use the windows calendar
+i told you the system calendar
+no the system calendar
+i want the system calendar
+open the calendar that comes with windows
+open outlook calendar
+
+## open_currency
+open currency converter
+open the currency converter
+currency converter
+currency convertor
+open currency
+open the currency app
+launch the currency converter
+start the currency converter
+show me the currency converter
+bring up the currency converter
+i need the currency converter
+i want to convert currency
+i want to convert some money
+let me convert currency
+open exchange rate converter
+exchange rate converter
+open the exchange rate converter
+can you open the currency converter
+open converter
+money converter
+open money converter
+open the currency calculator
+currency calculator
+open the currency tool
+currency tool
+pull up the currency converter
+i need to convert some money
+open the money converter app
+
+## open_downloads
+open downloads
+open my downloads
+open the downloads folder
+open downloads folder
+show my downloads
+show downloads
+show me my downloads
+go to downloads
+go to my downloads
+go to the downloads folder
+take me to downloads
+browse downloads
+open the download folder
+open download folder
+open my download folder
+launch downloads
+view my downloads
+see my downloads
+where are my downloads
+i want to see my downloads
+let me see my downloads
+open up downloads
+bring up my downloads
+pull up my downloads folder
+can you open my downloads
+can you open the downloads folder
+downloads folder please
+downloads please
+find my downloads
+what's in my downloads
+check my downloads folder
+what did i download
+what have i downloaded
+show me what i downloaded
+open the folder with my downloads
+
+## open_desktop
+open desktop
+open the desktop
+open my desktop
+open the desktop folder
+open desktop folder
+open my desktop folder
+go to desktop
+go to my desktop
+go to the desktop folder
+browse desktop
+browse my desktop
+show my desktop folder
+show me my desktop folder
+take me to my desktop
+what's on my desktop
+what files are on my desktop
+what's on the desktop
+what do i have on my desktop
+check my desktop
+check my desktop folder
+look at my desktop folder
+desktop folder please
+can you open my desktop folder
+bring up my desktop folder
+open the desktop directory
+view my desktop files
+show me the files on my desktop
+list my desktop files
+open up the desktop folder
+
+## open_documents
+open documents
+open my documents
+open the documents folder
+open documents folder
+open my documents folder
+show my documents
+show me my documents
+go to documents
+go to my documents folder
+browse documents
+browse my documents
+take me to my documents
+where are my documents
+what's in my documents
+what's in my documents folder
+check my documents folder
+documents folder please
+can you open my documents
+bring up my documents
+view my documents
+pull up my documents folder
+open the folder with my documents
+i want to see my documents
+let me see my documents
+open my docs
+open docs folder
+open my docs folder
+open the documents directory
+look at my documents folder
+
+## open_pictures
+open pictures
+open my pictures
+open the pictures folder
+open pictures folder
+open my photos folder
+open photos folder
+show my pictures
+show me my pictures
+show me my photos
+go to pictures
+go to my pictures folder
+open my images folder
+open the images folder
+browse my pictures
+browse my photos
+take me to my pictures
+take me to my photos
+i want to see my photos
+let me see my pictures
+where are my pictures
+where are my photos
+pictures folder please
+can you open my pictures
+open the photos
+open my gallery
+bring up my pictures
+view my pictures folder
+pull up my photos
+open my photo folder
+look at my pictures folder
+
+## open_music
+open music folder
+open my music folder
+open the music folder
+show my music folder
+go to my music folder
+show me my music files
+go to the music folder
+where is my music folder
+browse my music
+i want to see my music folder
+open the folder with my songs
+open songs folder
+open my songs folder
+open the songs folder
+show my songs folder
+take me to my music folder
+browse music folder
+launch music folder
+my music folder
+music folder please
+can you open my music folder
+bring up my music folder
+view my music folder
+check my music folder
+open the folder where my songs are
+open my music files
+show me the folder with my music
+
+## open_videos
+open videos folder
+open my videos
+open the videos folder
+open my video folder
+show my videos folder
+go to my videos folder
+browse my videos
+i want to see my videos folder
+open the folder with my videos
+take me to my videos
+my videos folder
+videos folder please
+can you open my videos folder
+bring up my videos folder
+view my videos folder
+open my movies folder
+show me my movies folder
+open movies folder
+open the video folder
+show me my videos
+go to videos
+open the folder with my movies
+where are my videos
+check my videos folder
+open my video files

@@ -1,0 +1,741 @@
+# A second round of phrases for the kinds of request the first round was weakest at (found by training/train_nlu.py --report).
+# More different wordings teach the model more about what a kind of request sounds like. See talk.txt for how this file is used.
+
+## greet
+good day jarvis
+hello hello
+hey hey
+hello to you
+greetings jarvis
+hi hi
+rise and shine
+i'm here
+yo jarvis
+jarvis wake up
+are you with me
+are you ready
+hey are you around
+ready when you are
+hello assistant
+good to see you
+nice to see you again
+hey how's it going jarvis
+hello my friend
+hey friend
+hi buddy
+hey mate
+morning jarvis
+evening jarvis
+good evening jarvis
+good morning jarvis
+helloooo
+anyone home
+
+## how_are_you
+are you doing well
+are you having a good day
+are you feeling alright
+are you good
+are you alright
+is all well with you
+are you in a good mood
+are you feeling okay today
+how are things with you
+how are you getting on
+how's everything with you
+how are you holding up today
+hope you are well
+hope you're having a great day
+you okay
+you doing alright
+you feeling good
+what's your mood today
+how do you feel today
+how are you feeling right now
+everything okay with you
+how's it going with you
+how is your day going so far
+how's your evening
+how is your morning going
+
+## thanks
+that was perfect thanks
+cheers mate
+cheers jarvis
+that was helpful thank you
+helpful thanks
+thanks that was exactly what i needed
+thank you that's all i needed
+you're a lifesaver
+you saved me thanks
+that's very kind of you
+thank you for your help jarvis
+thanks for the help
+big thanks
+thanks heaps
+thanks a million
+i owe you one
+you're awesome thanks
+perfect that's all thank you
+brilliant thank you
+lovely thanks
+great stuff thanks
+good one thanks
+nice job jarvis
+well done jarvis
+thank you kindly
+
+## who_are_you
+who designed you
+who wrote you
+who coded you
+who trained you
+who is your owner
+who owns you
+who is your developer
+who is your maker
+who gave you life
+who are you and what do you do
+what is your name again
+tell me who you are
+say your name
+what's your name jarvis
+who exactly are you
+what are you exactly
+are you the jarvis assistant
+who is speaking to me
+who am i talking with right now
+what do i call you
+do you have a name
+may i ask who you are
+i'd like to know who you are
+introduce yourself please
+tell me a bit about who you are
+what's your identity
+who's this
+
+## help
+what are you good at
+what are you capable of
+what are you able to help with
+what kind of help can you give me
+what kinds of things can you do
+what can you help me with
+what can you help with
+what do you know how to do
+which things can you do for me
+tell me your abilities
+what are all your commands
+what are the available commands
+list all your commands
+list everything you can do
+show me everything you can do
+give me a list of your features
+what do i say to use you
+what should i say to you
+how do i give you commands
+how can i talk to you
+how do i use this assistant
+which commands do you understand
+what can i ask jarvis
+what questions can i ask you
+what tasks can you help with
+help me understand what you can do
+help me use jarvis
+need help
+a little help please
+can you tell me what you can do
+what are your functions
+what functions do you have
+show me your functions
+
+## read_notes
+what is in my notes
+read me what's in my notes
+read me my latest notes
+show me what i wrote in my notes
+what did i save in my notes
+what did my notes say
+read out the notes i saved
+read back my notes
+can you read my notes
+tell me what's in my notes
+what notes are saved
+which notes did i save
+show me all my notes
+list all my notes
+read all my notes
+read the notes i took
+read my saved notes
+what was in my last note
+let me hear my notes
+what do my notes say
+what's written in my notes
+read my note
+show my note
+see my latest note
+
+## forget_facts
+reset your memory
+reset everything you know about me
+reset all my facts
+reset all my details
+reset my information
+clear your memory of me
+clear everything you know about me
+wipe everything you know about me
+wipe your memory
+erase my information
+erase everything about me
+delete all my information
+delete my personal information
+remove my information
+remove what you know about me
+get rid of my facts
+get rid of everything you remember
+stop remembering things about me
+make yourself forget my facts
+i want you to forget my facts
+please erase my memories
+forget the things i asked you to remember
+forget what i asked you to remember
+clear all the things i told you to remember
+unlearn my facts
+discard my facts
+
+## recall_facts
+what have i told you to remember
+tell me what i told you to remember
+what did i ask you to keep in mind
+what do you have on me
+what do you know about me so far
+show me the facts you have about me
+list the facts you remember about me
+which facts do you remember
+which facts do you have saved
+what facts are saved
+tell me the things i asked you to remember
+what things do you remember about me
+repeat the facts i gave you
+read me the facts you remember
+what is stored about me
+what have you stored about me
+what have you learned so far about me
+do you know anything about me
+what can you tell me about myself
+what do you recall about me
+
+## system_calendar
+open the default calendar app
+native calendar
+open the native calendar
+built in calendar app
+open the calendar app that came with windows
+windows 10 calendar
+microsoft calendar app
+open the regular windows calendar
+the windows own calendar
+open the pc's calendar app
+outlook's calendar
+open the stock calendar
+open the windows built in calendar
+the built in windows calendar
+open windows' calendar
+bring up the windows calendar
+launch the system calendar app
+start windows calendar
+show me the windows calendar
+i want the windows calendar not yours
+not jarvis calendar the windows one
+open the other calendar the system one
+
+## system_calculator
+open the default calculator app
+native calculator
+open the native calculator
+built in calculator app
+open the calculator app that came with windows
+windows 10 calculator
+microsoft calculator app
+open the regular windows calculator
+the windows own calculator
+open the pc's calculator app
+open the stock calculator
+open the windows built in calculator
+the built in windows calculator
+open windows' calculator
+bring up the windows calculator
+launch the system calculator app
+start windows calculator
+show me the windows calculator
+i want the windows calculator not yours
+not jarvis calculator the windows one
+open the other calculator the system one
+
+## open_calendar
+open the calendar app
+open my calendar
+open up my calendar
+show me my calendar
+bring up my calendar
+launch my calendar
+let me see my calendar
+i want to look at the calendar
+can i see the calendar
+open the little calendar
+open your own calendar
+open jarvis's calendar
+
+## open_calculator
+open the calculator app
+open my calculator
+open up my calculator
+launch my calculator
+bring up my calculator
+show me your calculator
+i want to calculate something with the calculator
+open your own calculator
+open jarvis's calculator
+let me calculate something
+i need to add some numbers
+i need to multiply some numbers
+
+## mute
+turn the audio off
+switch off the audio
+audio off
+turn off audio
+kill the audio
+turn the audio on
+turn the sound on
+bring the sound back
+restore the sound
+sound back on please
+unmute the speakers
+mute the speakers
+silence the speakers
+turn off the speakers
+shut off the sound
+make the pc silent
+turn off all the audio
+i want no sound
+no audio please
+switch the audio off
+unmute the audio
+unmute everything
+mute the music
+
+## network
+is my wifi on
+is wifi connected
+check wifi
+is there internet
+do i have an internet connection
+is the net working
+internet working
+am i online right now
+is my connection up
+is my internet connection working
+am i connected to the net
+is the connection ok
+is my pc connected to the internet
+is this computer online
+is my laptop online
+how is my internet connection
+how is my connection
+tell me if i'm connected to the internet
+what is the ip of this laptop
+give me the ip address of this pc
+which ip address does my pc have
+what network am i on
+which network am i connected to
+which wifi am i on
+what wifi am i connected to
+am i on the internet
+
+## pc_status
+what's the condition of my laptop
+how is the condition of my pc
+what is the state of my computer
+give me the condition of my pc
+tell me how my laptop is doing
+tell me the status of my laptop
+status of my laptop
+status of my system
+how's the laptop
+how's the pc
+how's my machine
+check how my laptop is doing
+is everything fine with my pc
+is my laptop in good shape
+is my pc healthy
+how is the system performing
+how is my pc performing
+my pc's performance
+laptop performance
+computer performance
+give me a performance report
+full system check
+run a system check
+do a system check
+how is this computer doing
+
+## starlink
+starlink satellites
+how many satellites does starlink have in orbit
+size of the starlink network
+how large is starlink
+how large is the starlink constellation
+starlink constellation size
+tell me about the starlink constellation
+how many starlink satellites are flying
+how many starlink satellites are there in total
+total number of starlink satellites
+what's the size of the starlink fleet
+how many satellites make up starlink
+how many starlinks are up
+how many starlink satellites has spacex launched so far
+the number of starlink satellites
+starlink satellite numbers
+
+## timetable
+when is my next lesson
+which classes are today
+what's my next class
+what class is next
+do i have class today
+what subjects do i have today
+show my class timetable
+what's scheduled in my time table
+what is in my time table for today
+what is my timetable for today
+show me today's time table
+read me my time table
+what lectures do i have
+what lectures are there today
+what do i have in class today
+which period is next
+what is my next period
+show my periods
+what's on my study plan
+what is my study plan for today
+
+## date
+what year is it now
+which year is this
+what's the year
+current year
+what year are we in
+which month is it
+what month are we in
+what's the current month
+what is today's day and date
+tell me the day today
+what date is it today
+what's today's date jarvis
+today's day
+what is the day today
+
+## list_tasks
+what's pending
+what's still pending
+anything pending
+pending items
+what is outstanding
+what's left for today
+any pending tasks
+what remains on my list
+what's still to do
+what else do i have to do
+what else is there to do today
+show me what is left to do
+read what is left on my list
+which tasks are left
+how many tasks do i have
+how many tasks are left
+what jobs do i have
+what jobs are pending
+what work do i have today
+what work do i have tomorrow
+what chores do i have
+list my chores
+list my to dos
+show me my to dos
+my to dos
+
+## open_pictures
+open the gallery
+open my picture folder
+open my pics
+show my gallery
+show me my gallery
+open my photo gallery
+open the photos folder
+show me the photos folder
+go to my photos
+where are my pics
+open my camera roll
+open the folder with my pictures
+open the folder with my photos
+bring up my photos folder
+
+## cpu
+how many cores
+how many cpu cores
+core count
+number of cores
+how many cores are there in my processor
+how many threads does my cpu have
+what is my cpu model
+which processor is in my laptop
+tell me my cpu model
+what kind of processor do i have
+how fast is my cpu
+what's my cpu speed
+what is the clock speed of my processor
+is my cpu busy
+is the processor busy right now
+how much is the cpu working
+cpu percentage
+cpu percent
+
+## next_track
+play something different
+change it
+skip it please
+another one
+play a different song
+i want to hear something else
+i want a different song
+put on something else
+play the next one
+next one
+go to the next one
+skip this track please
+skip ahead to the next song
+move on to the next song
+can you skip this
+
+## previous_track
+go back a track
+rewind one song
+play it again from the last song
+go back to the song before
+take me back a song
+the last song please
+go to the previous one
+previous song please
+back one song
+go back to the previous track
+
+## play_pause
+pause please
+pause for a second
+pause the audio
+pause the playback please
+resume the audio
+resume playing the music
+continue playing the music
+please continue the song
+start the song again
+play it again
+stop the audio
+stop what is playing
+stop the sound
+hold on pause
+
+## volume_up
+speak louder
+talk louder
+can you speak up
+can you talk louder
+i can't hear you well
+i can hardly hear you
+raise your voice
+make your voice louder
+turn your voice up
+more sound please
+increase the volume a bit
+up the sound
+boost the sound
+bring the volume up
+volume a little higher
+sounds too quiet
+make it a bit louder please
+
+## volume_down
+speak softer
+talk softer
+talk quieter
+speak quieter
+lower your voice
+make your voice softer
+turn your voice down
+less sound please
+decrease the volume a bit
+down the sound
+bring the volume down
+volume a little lower
+sounds too loud
+make it a bit quieter please
+that's very loud
+it's deafening
+
+## battery
+is my battery full
+is the battery fully charged
+how charged is my laptop
+how charged am i
+what's the charge on my laptop
+how much battery life is left
+how long until my battery dies
+when will my battery run out
+battery life
+battery left
+remaining charge
+tell me my battery percentage
+tell me how much battery i have
+what percentage is my battery at
+what percentage of battery is left
+is the laptop on battery or plugged in
+am i on battery power
+is my laptop running on battery
+
+## ram
+how much memory does my pc have
+how much memory is installed
+what's the total memory
+how much ram is installed
+how much ram is available right now
+how much memory is in use right now
+how much memory is my computer using
+ram size
+memory size
+how much memory have i got
+how much ram have i got
+how much memory is being used right now
+is there enough memory
+is memory running low
+am i low on memory
+
+## disk
+how much space is left
+how much space do i have left
+how much space is available
+how much disk space is available
+how much room do i have left
+how much storage is available
+how much storage is used
+how much of my disk is used
+how much of my drive is used
+what's the capacity of my drive
+what is the size of my hard disk
+disk capacity
+drive capacity
+storage capacity
+am i low on space
+am i low on storage
+is my disk almost full
+is the hard drive almost full
+
+## screenshot
+screenshot the screen
+screenshot my screen
+take a screenshot of my screen
+take a screenshot of this
+take a screenshot of the screen
+take a screenshot for me
+can you screenshot this
+can you capture my screen
+grab my screen
+grab what's on my screen
+copy what's on the screen as an image
+save what's on the screen
+save an image of my screen
+record a still of the screen
+make a copy of my screen as a picture
+
+## find_screenshots
+where did the screenshot save
+where is the screenshot you took
+where do you keep the screenshots
+where are the pictures of my screen
+show me the folder with my screenshots
+open the folder with the screenshots
+which folder has my screenshots
+where can i find the screenshot
+where's my screenshot
+find the last screenshot
+open the screenshot you just took
+show me the screenshot i just took
+show me my latest screenshot
+open my newest screenshot
+open the most recent screenshot
+let me see the latest screenshot
+
+## location
+what is my location right now
+where am i at the moment
+what's my position
+tell me my current location
+what is my current city
+what's the name of this city
+what's this city called
+which city are we in
+which place is this
+what part of the world am i in
+what country is this
+which country are we in
+where in the world am i
+am i in pakistan
+where is this
+
+## iss
+where is the space station
+where's the international space station right now
+iss position now
+where is the iss now
+find the international space station
+locate the international space station
+track the international space station
+show the iss on the map
+current iss location
+what is the iss location
+where is the iss currently
+where's the station
+where is the satellite station
+space station tracker
+where is the iss at the moment
+
+## last_launch
+what was the last launch
+what was the last spacex rocket launch
+the previous spacex launch
+last launch by spacex
+what was spacex's last launch
+what was the latest launch
+the most recent launch
+most recent launch by spacex
+what did spacex launch most recently
+tell me about spacex's last launch
+what was the last rocket spacex sent up
+how did spacex's last launch go
+did the last spacex launch succeed
+when was spacex's last launch
+
+## next_launch
+when is spacex's next launch
+what is spacex's next launch
+the next spacex launch
+next launch by spacex
+when does the next spacex rocket go up
+when is the next rocket going up
+when's the next launch
+when is the next mission
+what is the next mission
+what is the next rocket launch
+tell me about the upcoming launch
+what launches are coming up
+what launches are upcoming
+when is the next falcon 9 launch
+which rocket launches next

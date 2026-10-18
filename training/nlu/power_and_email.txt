@@ -1,0 +1,201 @@
+# Things that change the computer or send something out. Jarvis always asks again before doing any of these. See talk.txt.
+
+## email
+send an email
+send email
+send a mail
+send mail
+send an e-mail
+write an email
+write a mail
+write an e-mail
+compose an email
+compose a mail
+compose email
+draft an email
+draft a mail
+draft email
+i want to send an email
+i want to send a mail
+i need to send an email
+i need to send a mail
+i have to send an email
+i would like to send an email
+i'd like to send an email
+i wanna send an email
+let me send an email
+let's send an email
+can you send an email
+can you send an email for me
+could you send an email
+can you write an email
+can you write an email for me
+can you help me send an email
+help me send an email
+help me write an email
+email someone
+email somebody
+mail someone
+mail somebody
+send someone an email
+send somebody an email
+send a message by email
+send a message via email
+start a new email
+new email
+create an email
+create a new email
+make an email
+email for me
+compose a new email
+write a new email
+
+## shutdown
+shut down the computer
+shut down my computer
+shut down the pc
+shut down my pc
+shut down the laptop
+shut down my laptop
+shut down the system
+shutdown the computer
+shutdown my pc
+shutdown the pc
+shutdown the laptop
+shutdown
+shut down
+shut it down
+power off
+power off the computer
+power off my pc
+power off the pc
+power off the laptop
+power down
+power down the computer
+power down my pc
+turn off the computer
+turn off my computer
+turn off the pc
+turn off my pc
+turn off the laptop
+turn off my laptop
+turn off the system
+switch off the computer
+switch off my pc
+switch off the laptop
+switch off the system
+please shut down the computer
+i want to shut down the computer
+i want to turn off my pc
+i'm done for today shut down
+i'm done shut down the computer
+that's it for today shut down the pc
+we're done shut down the computer
+close down the computer
+power the computer down
+can you shut down the computer
+can you turn off the pc
+could you shut down my laptop
+shut the computer down
+shut the pc down
+shut the laptop down
+turn the computer off
+turn the pc off
+turn the laptop off
+switch the computer off
+switch the laptop off
+
+## restart
+restart the computer
+restart my computer
+restart the pc
+restart my pc
+restart the laptop
+restart my laptop
+restart the system
+restart
+reboot
+reboot the computer
+reboot my computer
+reboot the pc
+reboot my pc
+reboot the laptop
+reboot the system
+reboot my laptop
+please restart the computer
+i want to restart the computer
+i want to restart my pc
+i need to restart my pc
+i need to restart my computer
+i need to reboot my computer
+can you restart the computer
+can you restart my pc
+could you reboot the pc
+could you restart my laptop
+restart the machine
+reboot the machine
+restart this computer
+restart this pc
+reboot this computer
+reboot this pc
+restart this laptop
+reboot this laptop
+restart windows
+reboot windows
+restart my machine
+reboot my machine
+do a restart
+do a reboot
+perform a restart
+perform a reboot
+give the computer a restart
+give the pc a restart
+give my laptop a restart
+the computer needs a restart
+i need a restart
+restart it
+reboot it
+restart the computer now
+reboot the computer now
+restart it now
+
+## lock_screen
+lock the screen
+lock my screen
+lock the computer
+lock my computer
+lock the pc
+lock my pc
+lock the laptop
+lock my laptop
+lock it
+lock windows
+lock this computer
+lock this pc
+lock this laptop
+lock screen
+please lock the screen
+please lock the computer
+i want to lock the computer
+i want to lock my pc
+i'm leaving lock the computer
+i'm stepping away lock the screen
+i'll be right back lock the pc
+secure my computer
+secure the pc
+secure my screen
+secure the screen
+protect my computer
+put a lock on the screen
+put the screen on lock
+activate the lock screen
+turn on the lock screen
+go to the lock screen
+switch to the lock screen
+show the lock screen
+can you lock the screen
+can you lock my computer
+could you lock the pc
+could you lock my laptop
+lock up the computer
+lock up my pc

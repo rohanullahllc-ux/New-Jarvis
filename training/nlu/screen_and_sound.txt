@@ -1,0 +1,340 @@
+# Screenshots, volume and music controls. See talk.txt for how this file is used.
+
+## screenshot
+take a screenshot
+take screenshot
+screenshot
+capture the screen
+capture my screen
+capture screen
+grab a screenshot
+grab the screen
+snap the screen
+snap my screen
+take a picture of the screen
+take a picture of my screen
+take a photo of my screen
+screenshot please
+take a screen shot
+make a screenshot
+create a screenshot
+save a screenshot
+save my screen
+save the screen as an image
+can you take a screenshot
+i need a screenshot
+i want a screenshot
+get a screenshot
+screen capture
+do a screenshot
+do a screen capture
+print screen
+shoot the screen
+screengrab
+take a screen grab
+take a snapshot of the screen
+snapshot of my screen
+capture what's on the screen
+capture this
+screenshot this
+take a shot of the screen
+could you take a screenshot for me
+quickly take a screenshot
+i'd like a screenshot of this
+take a picture of what is on my screen
+copy my screen as a picture
+store a screenshot of this screen
+
+## find_screenshots
+where are my screenshots saved
+where is the screenshot saved
+where do screenshots go
+where are the screenshots
+where did you save the screenshot
+where did my screenshot go
+where can i find my screenshots
+where do you save screenshots
+show me where the screenshots are
+which folder are the screenshots in
+what folder are screenshots saved in
+open the screenshots folder
+open the screenshot folder
+open my screenshots
+show the screenshots folder
+show me my screenshots
+show my screenshots
+open the last screenshot
+open the latest screenshot
+open the screenshot
+view my screenshots
+see my screenshots
+where is my screenshot
+find my screenshots
+find the screenshot
+locate my screenshots
+take me to my screenshots
+go to the screenshots folder
+i can't find my screenshot
+i want to see my screenshots
+display my screenshots
+show me the screenshot you took
+where did the screenshot go
+where is the picture you just took of my screen
+open the picture of my screen
+show me the last screenshot
+let me see the screenshot
+let me see my screenshots
+
+## volume_up
+volume up
+turn the volume up
+turn it up
+increase the volume
+raise the volume
+louder
+make it louder
+a bit louder
+little louder
+turn up the volume
+crank it up
+pump up the volume
+up the volume
+more volume
+i can't hear you
+speak up
+bit more volume
+boost the volume
+volume higher
+higher volume
+increase sound
+sound up
+can you make it louder
+it's too quiet
+too quiet
+it is too low
+volume is too low
+make the sound louder
+raise the sound
+turn the sound up
+turn up the sound
+i can barely hear it
+it's hard to hear
+make the volume higher
+give me more volume
+a little more volume please
+can you turn it up a bit
+turn up the music
+make the music louder
+louder please
+increase the sound a little
+i need it louder
+
+## volume_down
+volume down
+turn the volume down
+turn it down
+decrease the volume
+lower the volume
+reduce the volume
+quieter
+make it quieter
+a bit quieter
+little quieter
+turn down the volume
+down the volume
+less volume
+softer
+make it softer
+lower it
+too loud
+it's too loud
+that's too loud
+it is too loud
+volume is too high
+volume lower
+sound down
+turn the sound down
+reduce the sound
+lower the sound
+keep it down
+not so loud
+not that loud
+bit lower please
+make the volume lower
+give me less volume
+a little less volume please
+can you turn it down a bit
+turn down the music
+make the music quieter
+quieter please
+decrease the sound a little
+it's way too loud
+i need it quieter
+you're too loud
+
+## mute
+mute
+mute the volume
+mute the sound
+mute the audio
+mute it
+mute the pc
+mute the computer
+mute my computer
+unmute
+unmute the volume
+unmute the sound
+turn off the sound
+turn the sound off
+sound off
+no sound
+kill the sound
+cut the sound
+turn off the volume
+volume off
+make it silent
+go silent
+switch off the sound
+toggle mute
+toggle the sound
+zero volume
+turn the volume to zero
+unmute please
+mute please
+please mute the sound
+can you mute the sound
+could you mute the volume
+mute my pc
+mute everything
+turn off all sound
+no volume
+volume to zero
+switch the sound off
+turn the audio off
+turn the audio on again
+
+## play_pause
+pause
+pause the music
+pause the song
+pause the video
+pause it
+pause playback
+resume
+resume the music
+resume the song
+resume the video
+resume playback
+continue the music
+continue playing
+continue the song
+unpause
+unpause the music
+start the music again
+start playing again
+stop the music
+stop the song
+stop the video
+stop playing
+hold the music
+hold on pause it
+pause that
+pause this
+pause that song
+pause this video
+play pause
+toggle playback
+play or pause
+keep playing
+carry on playing
+put the music on pause
+can you pause it
+pause the track
+pause the movie
+resume the movie
+resume playing
+stop the track
+stop playback
+pause what's playing
+continue what was playing
+restart the music
+
+## next_track
+next
+next song
+next track
+next video
+skip
+skip this
+skip this song
+skip the song
+skip this track
+skip this one
+skip the track
+skip to the next song
+play the next song
+play next song
+play the next track
+go to the next song
+go to the next track
+change the song
+change the track
+change this song
+switch the song
+switch to the next song
+next one please
+another song
+play another song
+different song
+play something else
+next please
+move to the next song
+forward to next song
+skip it
+skip forward a track
+i don't like this song
+i don't like this song skip it
+not this song
+this song is boring
+next song please
+go to the next video
+play the next video
+jump to the next song
+next track please
+skip to the next track
+change to the next song
+put on the next song
+
+## previous_track
+previous song
+previous track
+previous video
+last song
+last track
+go back a song
+go back to the previous song
+play the previous song
+play previous song
+play the last song
+play the last track
+play the song before
+go to the previous track
+back to the previous song
+previous one
+previous please
+the song before
+replay the last song
+go back to the last song
+skip back
+skip backward a track
+back a track
+take me back to the previous song
+switch to the previous song
+go to the song before this one
+play the previous video
+go to the previous video
+previous track please
+play the song that was playing before
+go back one song
+back to the last track
+play the track before this one

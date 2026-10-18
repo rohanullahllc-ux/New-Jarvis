@@ -1,0 +1,368 @@
+# The weather, where you are, and space. See talk.txt for how this file is used.
+# In the weather lines, {place} is replaced by a city or village name when the phrases are loaded.
+
+## weather
+what's the weather
+what is the weather
+what's the weather like
+what's the weather today
+how's the weather
+how is the weather
+how's the weather today
+how is the weather outside
+what's the weather like outside
+what's it like outside
+what's the temperature
+what is the temperature outside
+what's the temperature today
+how hot is it
+how cold is it
+how warm is it
+how hot is it outside
+how cold is it outside
+is it hot outside
+is it cold outside
+is it warm outside
+is it raining
+is it going to rain
+will it rain today
+will it rain tomorrow
+is it going to rain today
+do i need an umbrella
+should i take an umbrella
+do i need a jacket
+should i wear a jacket
+is it sunny
+is it sunny outside
+is it cloudy
+is it cloudy today
+is it windy
+is it snowing
+weather forecast
+weather report
+the weather forecast
+give me the weather forecast
+tell me the weather
+tell me the weather forecast
+check the weather
+check the weather forecast
+show me the weather
+what's the forecast
+what is the forecast for today
+what's the forecast for tomorrow
+what's the weather going to be like
+what will the weather be like tomorrow
+how's the weather going to be
+weather please
+weather today
+weather now
+current weather
+the weather
+what's the weather like in {place}
+weather in {place}
+how's the weather in {place}
+what's the temperature in {place}
+is it raining in {place}
+how hot is it in {place}
+weather forecast for {place}
+tell me the weather in {place}
+what's the weather like at {place}
+what is the weather in {place} today
+how is the weather in {place} right now
+what's the weather in {place} tomorrow
+give me the weather for {place}
+check the weather in {place}
+is it sunny in {place}
+is it cold in {place}
+what's the temperature like in {place} right now
+do i need an umbrella in {place}
+how's the weather over in {place}
+tell me how the weather is in {place}
+
+## location
+where am i
+where am i right now
+where am i located
+what's my location
+what is my current location
+my location
+my current location
+tell me my location
+tell me where i am
+show me my location
+what city am i in
+which city am i in
+what city is this
+which city is this
+what country am i in
+which country am i in
+in which city am i
+in which country am i
+locate me
+find my location
+where is my location
+can you tell me where i am
+do you know where i am
+do you know my location
+check my location
+where are we
+where exactly am i
+what place is this
+what's my current city
+what is the name of the city i am in
+tell me which city i'm in
+which place am i in right now
+
+## iss
+where is the iss
+where's the iss
+where is the international space station
+where's the space station
+where is the space station right now
+iss location
+iss position
+iss tracker
+track the iss
+track the space station
+locate the iss
+find the iss
+show me the iss
+show me the space station
+where is iss
+where is is
+where's is
+where is the i s s
+what's the location of the iss
+what is the position of the space station
+current position of the iss
+current location of the international space station
+is the iss above me
+is the space station above us
+where is the station in space
+which country is the iss over
+what is the iss over right now
+iss now
+space station location
+space station position
+show space station location
+tell me where the international space station is
+where is the space station at the moment
+how can i see the iss
+
+## starlink
+how many starlink satellites
+starlink count
+how many satellites does starlink have
+how many starlinks are there
+how many starlink satellites are in orbit
+how many starlink satellites are up there
+number of starlink satellites
+starlink satellites count
+starlink satellite count
+tell me about starlink satellites
+tell me starlink satellite count
+how big is the starlink constellation
+how many satellites has spacex launched for starlink
+how many starlink are in space
+how many starlink sats
+how many satellites are in the starlink network
+starlink numbers
+starlink status
+starlink info
+starlink information
+what about starlink
+what's the starlink count
+count the starlink satellites
+starlink satellites in orbit
+how many starlink satellites are active
+how many starlink are active
+how many of the starlink satellites are still up
+starlink
+how many starlink satellites exist right now
+tell me how many starlink satellites there are
+
+## next_launch
+next spacex launch
+when is the next spacex launch
+when's the next spacex launch
+when is the next launch
+when's the next rocket launch
+when is the next rocket launch
+next rocket launch
+upcoming spacex launch
+upcoming launch
+upcoming rocket launch
+upcoming rocket launches
+what's the next launch
+what is the next launch
+what's the next spacex launch
+what is the next rocket launch
+when does spacex launch next
+when is spacex launching next
+when is the next falcon launch
+when's the next falcon 9 launch
+next falcon 9 launch
+tell me about the next launch
+tell me about the next spacex launch
+tell me the next launch
+show me the next launch
+next rocket going up
+next rocket to launch
+when is the next rocket going up
+when will spacex launch again
+what launch is next
+what's coming up for spacex
+spacex upcoming launches
+when is spacex's next mission
+what is spacex launching next
+
+## last_launch
+latest spacex launch
+latest spacex launches
+the latest spacex launch
+last spacex launch
+the last spacex launch
+most recent spacex launch
+recent spacex launch
+recent spacex launches
+what was the last spacex launch
+what was the latest spacex launch
+what was the most recent launch
+what was the last launch
+what was the last rocket launch
+last rocket launch
+latest rocket launch
+most recent rocket launch
+when was the last spacex launch
+when was the last launch
+when did spacex last launch
+when did spacex launch last
+what did spacex launch last
+tell me about the last launch
+tell me about the latest spacex launch
+show me the latest launch
+previous spacex launch
+previous launch
+how did the last launch go
+how was the last spacex launch
+what happened with the last launch
+the most recent rocket launch
+what was spacex's most recent mission
+
+## asteroids
+asteroids this week
+asteroids
+any asteroids this week
+any asteroids near earth
+near earth asteroids
+near earth objects
+are there any asteroids near earth
+are there asteroids coming close to earth
+are any asteroids coming near earth
+which asteroids are close to earth
+which asteroids are passing earth this week
+asteroids passing earth
+asteroids passing by earth this week
+what asteroids are near earth
+what asteroids are coming this week
+what asteroids are approaching
+is an asteroid going to hit earth
+any asteroid going to hit earth
+will an asteroid hit earth
+is there an asteroid heading toward earth
+tell me about asteroids near earth
+tell me about this week's asteroids
+show me asteroids
+show me this week's asteroids
+how many asteroids are near earth
+how many asteroids are passing this week
+asteroid report
+asteroid alert
+any space rocks near earth
+space rocks near earth
+close approach asteroids
+near earth object report
+neo report
+
+## nasa_picture
+nasa picture of the day
+nasa's picture of the day
+nasa photo of the day
+nasa image of the day
+astronomy picture of the day
+space picture of the day
+space photo of the day
+picture of the day
+photo of the day from nasa
+show me the nasa picture of the day
+show me nasa's picture of the day
+show me today's nasa picture
+show me today's space picture
+today's nasa picture
+today's space picture
+today's astronomy picture
+what is nasa's picture of the day
+what is the nasa picture of the day
+what's the astronomy picture of the day
+what's today's astronomy picture
+tell me about nasa's picture of the day
+apod
+nasa apod
+nasa picture
+a nasa picture
+show me a space picture
+show me a picture from nasa
+show me a nasa photo
+show a nasa photo
+show me a picture of space
+give me today's nasa photo
+get the nasa picture of the day
+fetch the nasa picture of the day
+nasa space image
+space photo
+astronomy photo
+
+## mars_photos
+show me mars photos
+mars photos
+photos of mars
+pictures of mars
+images of mars
+mars pictures
+mars images
+mars pics
+show me pictures of mars
+show me photos of mars
+show me mars pictures
+show me mars images
+show me a picture of mars
+show me a photo of mars
+show me a mars photo
+show a photo from mars
+mars rover photos
+mars rover pictures
+mars rover images
+curiosity rover photos
+curiosity rover pictures
+photos from the curiosity rover
+photos from curiosity
+pictures from curiosity
+perseverance rover photos
+photos from perseverance
+pictures from perseverance
+latest mars photos
+latest photos from mars
+newest mars photo
+newest photo from mars
+recent mars photos
+get me mars photos
+fetch mars photos
+what does mars look like right now
+any new photos from mars
+any new pictures from mars rovers
+what did the mars rover see
+what did curiosity see today
+what is the mars rover seeing
+pictures taken on mars
+photos taken on mars
+photos taken by the rover

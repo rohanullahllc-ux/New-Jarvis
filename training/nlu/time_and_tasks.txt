@@ -1,0 +1,426 @@
+# Time, date, the to do list, the time table, notes and what Jarvis remembers. See talk.txt for how this file is used.
+
+## time
+what time is it
+what's the time
+what is the time
+tell me the time
+current time
+time please
+what's the time now
+what is the time right now
+do you have the time
+do you know the time
+got the time
+have you got the time
+can you tell me the time
+could you tell me the time
+what time is it now
+what time is it right now
+what's the time please
+time now
+the time
+what's the current time
+what is the current time
+tell me the current time
+check the time
+show me the time
+give me the time
+may i know the time
+what time do we have
+what's the time jarvis
+yo what's the time
+hey what time is it
+how late is it
+what o'clock is it
+what's the time sir
+what time have we got
+time check
+any idea what time it is
+do you know what time it is
+i want to know the time
+i need the time
+how much is the clock
+what does the clock say
+look at the clock for me
+tell me what time it is
+please tell me the time
+what time is it there
+what's the hour
+which time is it
+
+## date
+what's the date
+what is the date today
+today's date
+what's today's date
+what date is it
+what is today's date
+tell me the date
+what day is it
+what day is it today
+what day is today
+which day is today
+which day is it
+what's today
+what is today
+which date is today
+today's date please
+tell me today's date
+what's the date today
+do you know the date
+can you tell me the date
+can you tell me what day it is
+what is the day today
+tell me the day
+what day of the week is it
+which day of the week is it
+current date
+the date
+date today
+check the date
+what's the date sir
+give me today's date
+show me the date
+what date is today
+i want to know the date
+what is the date of today
+which day of the month is it
+what's the day and date today
+tell me the day and date
+what are today's day and date
+what month is it
+which month are we in
+what year is it
+
+## am_pm
+am or pm
+is it am or pm
+is it am
+is it pm
+is it morning
+is it morning or evening
+is it day or night
+is it night
+is it daytime
+is it afternoon
+is it evening now
+is it morning now
+is it night time
+is it afternoon already
+are we in the morning
+is it the morning
+what part of the day is it
+is it still morning
+is it still afternoon
+is it day or night right now
+morning or evening
+is it a.m. or p.m.
+is it a m or p m
+a m or p m
+is it afternoon or evening
+is it noon
+is it midnight
+is it already evening
+is it nighttime yet
+is it evening yet
+is it morning yet
+tell me if it is am or pm
+is it the afternoon now
+are we in the evening now
+is it daytime or nighttime
+is it noon yet
+
+## list_tasks
+what's on my to do list
+what is on my to do list
+show my to do list
+read my to do list
+list my tasks
+what are my tasks
+show my tasks
+what tasks do i have
+what do i have to do
+what do i have to do today
+what do i have to do tomorrow
+what's on my list
+what's on my list for today
+what's on my list for tomorrow
+what's on my schedule
+what's on my schedule today
+what's on my schedule for tomorrow
+what's my schedule for tomorrow
+what's my schedule
+what is scheduled for today
+what is scheduled for tomorrow
+what task was scheduled
+what tasks are scheduled
+what is pending
+what's pending today
+any tasks for today
+any tasks for tomorrow
+do i have any tasks
+do i have anything to do today
+do i have anything scheduled
+do i have anything for tomorrow
+anything on my list
+is there anything on my list
+what's left to do
+what's left on my list
+what else is on my list
+what do i need to do today
+what do i need to do tomorrow
+read out my tasks
+tell me my tasks
+tell me what i have to do
+my to do list
+my tasks for today
+my tasks for tomorrow
+show me today's tasks
+what is on my plate today
+read my reminders
+what reminders do i have
+check my to do list
+check my tasks
+open my to do list
+pending tasks
+what do i have planned for tomorrow
+what do i have on friday
+what's on my list for friday
+what do i have scheduled on monday
+what's on for tomorrow
+what did i schedule for tomorrow
+what have i scheduled
+
+## timetable
+what's on my time table
+show my time table
+show my timetable
+what's on my timetable today
+what's my timetable
+read my time table
+my time table
+what classes do i have today
+what classes do i have tomorrow
+what lessons do i have
+what's my class schedule
+show me my class schedule
+what's my daily routine
+what is my routine today
+what's my routine
+what's on my routine
+show my daily routine
+read my timetable
+tell me my time table
+show me my time table
+what is on my time table
+what's in my time table
+display my time table
+open my time table
+what's the plan on my time table
+what is my study time table
+show my study time table
+what's my study routine
+what do i study today
+what's my timetable for tomorrow
+which lectures do i have today
+when is my next class
+
+## take_note
+take a note
+write a note
+make a note
+create a note
+save a note
+note this down
+note that down
+jot this down
+jot that down
+jot down a note
+write this down
+write that down
+i want to write a note
+i want to make a note
+i need to take a note
+i need to note something
+can you note something
+let me dictate a note
+short note
+quick note
+take a quick note
+take a short note
+new note
+add a note
+write something down
+save this as a note
+put this in my notes
+start a note
+start a new note
+make a note for me
+i want you to take a note
+note something for me
+write down something
+can you write a note
+could you take a note for me
+i'd like to leave a note
+let me tell you something to write down
+take down a note
+please take a note
+make a quick note
+create a new note
+i have something to note down
+i want to save something in my notes
+write a short note for me
+take a memo
+make a memo
+write a memo
+note down something for me
+
+## read_notes
+show my notes
+read my notes
+read my last note
+read my latest note
+what are my notes
+what's in my notes
+what did i write in my notes
+what notes do i have
+list my notes
+do i have any notes
+check my notes
+read me my notes
+read out my notes
+tell me my notes
+view my notes
+see my notes
+show me the notes i saved
+what notes did i save
+what was my last note
+read the note i wrote
+what's my latest note
+read the last note i saved
+display my notes
+my notes
+notes please
+let me see my notes
+show saved notes
+any notes saved
+go through my notes
+look at my notes
+read back my last note
+what did my last note say
+tell me what my last note says
+read the note i just made
+what notes have i taken
+read my recent notes
+show me my recent notes
+
+## open_note
+open the note
+open my note
+open my last note
+open the latest note
+open my latest note
+open the last note
+open the saved note
+open the note file
+open notes file
+open the notes folder
+open the most recent note
+bring up my note
+pull up my last note
+open up my note
+open the note i just saved
+open the note i wrote
+open that note
+open my saved notes
+open recent note
+launch my notes
+start my notes
+open my notes
+open the notes
+open my notes folder
+open the folder with my notes
+open the file with my notes
+show me the notes folder
+open up the notes
+bring up my notes
+pull up my notes
+open my last saved note
+open the note i just made
+open the note you just saved
+open the newest note
+
+## recall_facts
+what do you remember about me
+what do you know about me
+what have i told you
+what have i told you about myself
+what did i tell you
+what do you remember
+what do you know about me jarvis
+tell me what you remember about me
+what do you know of me
+what have i asked you to remember
+what facts do you have about me
+what facts did i give you
+list what you remember
+show me what you remember
+do you remember anything about me
+what's in your memory
+what's stored in your memory
+what is in your memory about me
+read your memory
+read back what i told you
+repeat what i told you
+what personal info do you have
+what information do you have about me
+tell me about myself
+what have you learned about me
+what do you remember of what i said
+recall my facts
+recall what i told you
+what things did i ask you to remember
+what do you remember about my preferences
+what do you remember from before
+tell me what you know about me
+what did i ask you to remember
+what have you memorised about me
+list my facts
+show me my facts
+tell me my facts
+read my facts
+what do you remember about me so far
+
+## forget_facts
+forget my facts
+forget everything about me
+forget what i told you
+clear my facts
+erase my facts
+delete my facts
+wipe my facts
+delete what you remember about me
+clear your memory about me
+forget all my details
+forget what you know about me
+remove everything you remember
+erase your memory of me
+clear my memories
+delete my memories
+forget my memories
+reset my facts
+reset what you know about me
+forget all the things i told you
+delete everything you know about me
+wipe your memory of me
+please forget everything you remember about me
+start forgetting everything about me
+remove all my facts
+forget all my facts
+forget everything you know about me
+erase everything you know about me
+clear everything you remember about me
+remove what you remember about me
+i want you to forget everything about me
+forget all that i told you

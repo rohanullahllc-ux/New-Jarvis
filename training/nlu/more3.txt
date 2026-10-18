@@ -1,0 +1,240 @@
+# A fourth round of phrases: more different ways to say the kinds of request that were still mixed up.
+# See talk.txt for how this file is used.
+
+## location
+tell me what city this is
+what's my location jarvis
+can you find out where i am
+find out where i am
+detect my location
+get my location
+share my location
+give me my location
+show my location on the map
+where is my current location
+what location am i at
+am i at home or somewhere else
+what's my whereabouts
+whereabouts please
+location please
+where am i currently located
+what is the place i am in right now
+what town am i in
+what area am i in
+which town is this
+name the city i am in
+
+## open_note
+open the note i saved
+open my newest note
+open the note from earlier
+open the most recent notes file
+open the last note i made
+open that last note
+show me the last note file
+open the note file i wrote
+bring up the last note
+bring up the latest note
+pull up the note
+pull up my latest note
+display the last note i saved in notepad
+open my note in notepad
+open the note app
+open the notes app
+launch the notes app
+go to my notes folder
+take me to my notes folder
+browse my notes folder
+
+## previous_track
+go to the previous song
+play the song before this
+play the one before
+play the previous one
+play the song from before
+go back to the song before
+back to the last song
+return to the previous song
+previous song again
+replay the previous track
+take it back a song
+skip back a song
+skip to the previous song
+skip to the last song
+jump back to the previous song
+rewind to the last song
+go back one track
+step back a track
+the previous track please
+
+## advice
+i need your advice
+what's your best advice
+what would you advise me
+what do you advise
+any words of advice
+got any words of wisdom
+give me a good piece of advice
+give me advice for today
+give me an advice
+tell me a good advice
+tell me something useful for life
+share a life tip
+share some life advice
+tell me a tip
+give me a tip
+one piece of advice please
+any tips for life
+a random life tip
+advise me
+
+## asteroids
+any asteroids close to earth
+are there asteroids close to earth
+asteroids near earth today
+asteroids close to earth this week
+asteroids passing close to earth
+what asteroids are passing earth
+what asteroids will pass earth this week
+list the asteroids near earth
+list near earth asteroids
+show me near earth asteroids
+show me the asteroids passing earth
+asteroid flybys this week
+asteroids flying by earth
+is there any danger from asteroids
+are there any dangerous asteroids
+any dangerous asteroids this week
+space rocks passing earth
+what space rocks are near earth
+near earth object list
+nasa asteroid report
+
+## time
+what time have you got
+what's the time right now
+what is the time at the moment
+time right now
+current time please
+tell me the time right now
+what's the time on the clock
+could i have the time
+could you give me the time
+i'd like to know the time
+i want the time
+give me the time please
+the time please
+what time is it currently
+how's the time
+time check please
+what is the time now please
+what's the time now jarvis
+check the clock
+what does my clock say
+
+## recall_facts
+what do you know about me jarvis
+what have you remembered about me
+which things do you remember about me
+tell me everything you remember about me
+tell me everything you know about me
+list everything you remember about me
+list all the facts you have
+read out all the facts
+read me my stored facts
+show me my stored facts
+show all stored facts
+what's been stored about me
+what did you save about me
+what did you note about me
+what have you saved about me
+what information have i given you
+what details have i given you
+what details do you have about me
+remind me what i told you
+remind me of the things i told you
+
+## thanks
+you are a lifesaver
+you're a star
+you're great
+you are great
+that's brilliant
+that was brilliant
+what a help you are
+that's awesome thank you
+awesome work
+excellent job
+fantastic
+fantastic thanks
+superb
+superb thank you
+very helpful thanks
+that was really good
+good answer thank you
+nice answer thanks
+i'm grateful
+i am thankful
+
+## greet
+heya jarvis
+hi hello
+hello hi
+a very good morning
+a very good evening
+a good morning to you
+good morning to you
+morning sir
+evening sir
+hey there sir
+assalam o alaikum jarvis
+salam jarvis
+as salamu alaikum
+hello jarvis wake up
+hi can you hear me
+hello can you hear me
+hey are you there
+hello is anyone there
+hello hello are you there
+
+## my_name
+what is my name again
+tell me my name again
+what's my name once more
+say what my name is
+my name is what
+what is it you call me
+what do you call me jarvis
+how do you know me
+by what name do you know me
+how do you call me
+
+## system_calendar
+system calendar please
+the system calendar one
+windows calendar please
+the windows calendar one
+open the system calendar please
+i meant the windows calendar
+i meant the system calendar
+no i meant the system calendar
+open windows's calendar
+open the calendar from windows
+open the calendar of the system
+
+## volume_up
+volume up a little
+a little louder please
+louder volume
+volume higher please
+turn up the volume a little
+raise the volume a bit
+increase volume
+i need the volume up
+put the volume up
+bring up the volume
+volume up please
+volume increase
+make the volume go up
+can you increase the volume
+could you raise the volume

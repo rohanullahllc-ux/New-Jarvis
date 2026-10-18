@@ -1,0 +1,289 @@
+# Questions about this computer. See talk.txt for how this file is used.
+
+## battery
+how is the battery
+how's the battery
+battery status
+battery level
+battery percentage
+what's the battery level
+what is the battery percentage
+how much battery is left
+how much battery do i have
+how much battery is remaining
+how much charge is left
+how much charge do i have
+what's my battery at
+what's my battery percentage
+how much juice is left
+is my laptop charging
+is the laptop charging
+is my battery charging
+is it charging
+am i charging
+is the charger connected
+is my pc plugged in
+is the laptop plugged in
+is my laptop plugged in
+check the battery
+check my battery
+tell me the battery status
+show battery status
+battery check
+how long will my battery last
+is my battery low
+is the battery low
+do i need to charge
+do i need to charge my laptop
+should i plug in my laptop
+battery please
+what is the charge level
+charge level
+remaining battery
+battery remaining
+how's my battery doing
+how is my battery doing
+how much power is left in the battery
+how much of the battery is left
+is my laptop about to die
+will my laptop die soon
+am i running out of battery
+
+## cpu
+how is the cpu
+cpu usage
+how's the cpu doing
+what is the cpu usage
+what's my cpu usage
+how busy is my cpu
+how busy is the processor
+check the cpu
+check cpu usage
+processor usage
+processor status
+processor load
+what is the processor load
+cpu load
+how much cpu is being used
+how much cpu am i using
+how much of the cpu is in use
+is my cpu overloaded
+is the processor working hard
+how hard is my cpu working
+what processor do i have
+which cpu do i have
+what cpu is in this computer
+tell me about my processor
+cpu info
+cpu information
+cpu details
+cpu speed
+how fast is my processor
+how many cores does my cpu have
+how many cores do i have
+what's the cpu doing
+how loaded is the processor
+tell me the cpu usage
+give me the cpu usage
+show me the cpu usage
+what is my processor
+how much processing power is being used
+
+## ram
+how much ram do i have
+how much memory do i have
+how much ram is free
+how much memory is free
+how much memory is available
+ram usage
+memory usage
+what is the ram usage
+what's my ram usage
+how much ram is being used
+how much ram am i using
+how much memory am i using
+how much memory is used
+how much ram is left
+how much memory is left
+how much ram is in use
+check my ram
+check the ram
+check memory usage
+check my memory
+is my ram full
+is my memory full
+is the memory almost full
+am i running out of memory
+am i running out of ram
+how much ram does this computer have
+how much ram does my pc have
+what's my ram
+what's my ram size
+how big is my ram
+ram info
+ram status
+memory status
+memory info
+ram please
+how many gigabytes of ram
+how many gb of ram do i have
+tell me about my ram
+ram available
+how much free memory do i have
+what is my memory usage
+tell me my memory usage
+show me memory usage
+
+## disk
+disk space
+how much disk space do i have
+how much disk space is left
+how much space is left on my drive
+how much space is left on the disk
+how much storage do i have
+how much storage is left
+how much free space do i have
+how much free space is left
+how much space is free
+how much free disk space
+how full is my disk
+how full is my drive
+how full is my hard drive
+how full is the hard disk
+is my disk full
+is my drive full
+is my hard drive full
+is my storage full
+am i running out of space
+am i running out of storage
+am i running out of disk space
+check disk space
+check my disk space
+check my storage
+check storage
+storage space
+storage status
+storage info
+disk usage
+disk status
+disk info
+drive space
+how big is my hard drive
+how big is my disk
+what's my storage capacity
+hard drive space
+free space
+what's the free space on my drive
+what drives do i have
+which drives do i have
+show me my drives
+list my drives
+how much space on c drive
+how much space is on the c drive
+how many gigabytes are free on my drive
+tell me the free space on my computer
+how much room is left on my hard drive
+
+## network
+what is my ip address
+what's my ip address
+what's my ip
+my ip address
+tell me my ip address
+tell me my ip
+show my ip address
+show me my ip address
+give me my ip address
+what is my ip
+what ip address am i using
+what is the ip address of this computer
+what's the ip of my pc
+what is my computer's ip address
+ip address please
+ip address
+my ip
+check my ip
+check my ip address
+find my ip address
+find out my ip address
+look up my ip address
+do you know my ip address
+what is my public ip
+what's my public ip address
+what is my local ip
+what is my network address
+am i connected to the internet
+am i online
+am i connected
+is my internet working
+is the internet working
+is my internet connected
+do i have internet
+check my internet connection
+check internet connection
+internet connection status
+network status
+am i connected to wifi
+am i connected to wi-fi
+check my network
+check the network
+is my wifi connected
+is the wifi working
+am i on wifi
+is my computer online
+
+## pc_status
+how is my pc doing
+how's my pc
+how is my computer doing
+how's my computer running
+how's my laptop doing
+how is my laptop running
+check my pc
+check my computer
+check my laptop
+check the system
+check system status
+system status
+pc status
+computer status
+status of my pc
+status of my computer
+what's the status of my pc
+what's the current status of my pc
+what's the current status of pc
+give me a pc status
+give me a system report
+system report
+system health
+pc health
+computer health
+how healthy is my pc
+how healthy is my computer
+is my pc ok
+is my computer okay
+is my pc running fine
+is my pc running well
+is my computer running smoothly
+system info
+system information
+show system information
+pc specs
+computer specs
+what are my pc specs
+what are the specs of my computer
+my pc specs
+what is the condition of my computer
+state of my pc
+how long has my pc been on
+uptime
+system uptime
+how long has my computer been running
+how long has the pc been on
+how long has my laptop been on
+pc uptime
+how is my machine doing
+give me an overview of my computer
+tell me how my pc is doing
+how's the system doing
+how is the computer running

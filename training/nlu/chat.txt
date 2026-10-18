@@ -1,0 +1,424 @@
+# Things people say that are NOT commands for Jarvis: questions and chat for the AI model to answer. They teach the trainer where
+# the edge of a command is, so ordinary questions are never mistaken for one. See talk.txt for how this file is used.
+
+## chat
+# ---- everyday knowledge
+why is the sky blue
+and why is the sunset red
+why is the ocean salty
+why do we dream
+why do cats purr
+why do birds fly south in winter
+why do onions make you cry
+why is grass green
+why do we have seasons
+why does the moon change shape
+how do airplanes stay in the air
+how do vaccines work
+how does the internet work
+how does a refrigerator work
+how do magnets work
+how do plants make food
+how does gps work
+how do rockets work
+how do bees make honey
+how does a microwave heat food
+what is photosynthesis
+what is gravity
+what is the capital of france
+what is the capital of japan
+what is the capital of australia
+what is the largest country in the world
+what is the tallest mountain in the world
+what is the longest river in the world
+what is the smallest planet
+what is dna
+what is an atom
+what is climate change
+what is inflation
+what is a black hole
+what is the big bang theory
+what is machine learning
+what is artificial intelligence
+what is blockchain
+what is the stock market
+what is democracy
+what is the meaning of life
+who invented the telephone
+who invented the light bulb
+who discovered america
+who wrote hamlet
+who painted the mona lisa
+who was the first man on the moon
+who was albert einstein
+who is alan turing
+who is the president of france
+who is the prime minister of canada
+who is the richest person in the world
+who founded microsoft
+who won the world cup in 2018
+who discovered penicillin
+who was napoleon
+when did world war two end
+when was the printing press invented
+when did the titanic sink
+when was the first iphone released
+when did pakistan become independent
+where is mount everest
+where is the great wall of china
+where do penguins live
+where was the first olympic games held
+which animal is the fastest on land
+which planet has the most moons
+which country has the most people
+which ocean is the deepest
+how many continents are there
+how many bones are in the human body
+how many planets are in the solar system
+how many people live in tokyo
+how tall is the eiffel tower
+how old is the universe
+how big is the sun
+how far is the sun from the earth
+how long does it take to fly to london
+how fast can a cheetah run
+how much does an elephant weigh
+how many days are in a leap year
+how do you say thank you in japanese
+how do you spell necessary
+what does serendipity mean
+what does the word ephemeral mean
+what is the opposite of happy
+what is a synonym for big
+what rhymes with orange
+translate this sentence into a nicer style
+# ---- explanations and teaching
+explain how a car engine works
+explain quantum computing in simple words
+explain the theory of relativity
+explain what a neural network is
+explain recursion to me
+explain how taxes work
+tell me how the heart pumps blood
+tell me how volcanoes erupt
+tell me about black holes
+tell me about the roman empire
+tell me about the history of pakistan
+tell me about the moon landing
+tell me about world war one
+tell me about the pyramids of giza
+tell me about dinosaurs
+tell me about the french revolution
+teach me about the solar system
+teach me how to cook rice
+teach me some basic spanish
+teach me how to play chess
+what is the difference between a virus and a bacteria
+what is the difference between weather and climate
+what is the difference between a list and a tuple in python
+what is the difference between speed and velocity
+what's the difference between affect and effect
+can you explain how electricity works
+can you explain the water cycle
+can you explain what an api is
+summarize the story of romeo and juliet
+summarize the plot of the lion king
+give me a summary of world history
+# ---- advice, feelings and personal
+i'm feeling sad today
+i had a bad day
+i feel lonely
+i'm so tired
+i can't sleep at night
+i'm stressed about my exams
+i'm nervous about my interview tomorrow
+i failed my test
+i got a promotion today
+i'm happy today
+i just finished my homework
+i miss my family
+i'm worried about my future
+how can i sleep better
+how do i get better at math
+how can i improve my english
+how can i be more productive
+how do i stop procrastinating
+how do i make friends
+how can i save money
+how do i lose weight
+how can i learn programming faster
+how do i prepare for an interview
+how do i manage stress
+any advice for studying
+give me advice on how to learn python
+advice on buying a laptop
+tips for a job interview
+what should i do about my exams
+should i learn python or java
+should i buy a laptop or a tablet
+should i study medicine or engineering
+is it good to drink coffee every day
+is it healthy to skip breakfast
+is it bad to sit all day
+what is the best way to learn a language
+what is the best way to study for exams
+what is a good way to relax
+what is a healthy breakfast
+what should i eat for dinner
+what should i cook tonight
+what should i wear to a wedding
+what should i name my dog
+what should i buy my mother for her birthday
+# ---- opinions and small talk
+do you like music
+do you have a favourite colour
+what's your favourite food
+are you happy
+are you afraid of anything
+do you ever get tired
+do you sleep
+do you have feelings
+can robots feel emotions
+what do you think about ai
+what do you think about the future
+do you believe in aliens
+do you like pizza
+do you want to be human
+what is your favourite movie
+what is your favourite song
+which is better cats or dogs
+which is better android or iphone
+what's your opinion on social media
+are you smarter than me
+can you think
+can you learn
+do you know everything
+do you get bored
+are you lonely
+what makes you happy
+what is your purpose
+what is love
+what is happiness
+what is the best programming language
+# ---- creative requests
+tell me a story
+tell me a bedtime story
+tell me a story about a dragon
+write a poem about the rain
+write a poem about my mother
+write a short story about space
+write a haiku about spring
+write a song about friendship
+sing me a song
+tell me a riddle
+give me a riddle
+give me a tongue twister
+give me a quote about success
+give me a motivational quote
+give me ideas for a birthday party
+give me a name for my new puppy
+give me a good book to read
+suggest a good movie
+suggest a good book
+suggest a song for studying
+suggest a name for my business
+recommend a laptop under five hundred dollars
+recommend a good restaurant
+what are some good books to read
+what are some fun things to do in lahore
+plan a trip to northern pakistan
+plan my study schedule for next week
+write me an email to my boss
+write a message to say i will be late
+write a cover letter for a job
+write a thank you note to my teacher
+draft a reply to this message
+help me write an essay about pollution
+help me with my homework
+can you help me with my homework
+can you help me write a speech
+can you help me learn english
+can you help me plan my day
+can you proofread my essay
+can you tell me something about space
+can you tell me why the sky is blue
+can you check the current jarvis code and tell me what can be improved
+# ---- coding and computers
+how do i reverse a string in python
+how do i read a file in python
+how do i install python on windows
+how do i create a website
+how do i learn javascript
+how do i use git
+what is the difference between html and css
+what is a variable in programming
+what is object oriented programming
+what is a database
+what is cloud computing
+what is an operating system
+what is cybersecurity
+what is the difference between ram and rom
+what does a cpu do
+what does the ram do in a computer
+how does a hard disk work
+how does a battery work
+how do solid state drives store data
+how does wifi work
+what is an ip address
+what is a screenshot
+what is a calendar
+what is a calculator used for
+what is a time table
+what is a to do list
+write a function in python to add two numbers
+write a python program to print the fibonacci series
+fix this error in my code
+why is my code not working
+why is my laptop so slow
+why is my phone battery draining fast
+why does my computer keep freezing
+why does my wifi keep disconnecting
+how do i speed up my computer
+how do i free up disk space on windows
+how do i take a screenshot on a mac
+how do i restart a router
+how do i mute someone on discord
+how do i lock a cell in excel
+how do i turn off notifications on my phone
+how do i shut down a docker container
+how do i reset my password on gmail
+# ---- sentences that merely share words with commands
+what time did the titanic sink
+what time does the sun set in london
+what time zone is new york in
+what time do banks open in pakistan
+what is the time complexity of binary search
+what is the date of independence day in pakistan
+what is the date of the next solar eclipse
+which day is the best day to start a business
+what day was i born if my birthday is in march
+what is the best weather for growing tomatoes
+who is the weather presenter on the news
+what is the best battery for a camera
+how long does a car battery last
+how do batteries store energy
+what is the charge of an electron
+how does a charger work
+what is the volume of a sphere
+what does volume mean in music
+how do i adjust the volume in a video editor
+what is a mute button
+who sings the song hello
+who sings thank you
+who wrote the song bored
+what does bored mean
+how do i stop being bored in class
+what does reboot mean
+what does shutdown mean in computing
+what happens when you restart a computer
+what is the difference between sleep and shutdown
+what is the difference between restart and shut down
+who is the person that invented the email
+what is an email address
+how do i write a professional email
+how do i start an email to a stranger
+what is a note in music
+what are the notes of a guitar
+how many notes are in an octave
+how do i take good notes in class
+what is a good way to take notes
+what is a photo of the day
+who took the first photograph
+how big is the international space station
+who is on the international space station
+how long can astronauts stay on the space station
+what is starlink
+who owns spacex
+who founded spacex
+what is the falcon heavy
+how do rockets reach orbit
+what is nasa
+who is the head of nasa
+what are asteroids made of
+how do asteroids form
+what is the biggest asteroid
+what is mars like
+why is mars red
+could humans live on mars
+how long does it take to get to mars
+who was the first dog in space
+what is the best dog breed for a family
+how do i train my dog to sit
+what do dogs eat
+how long do dogs live
+why do dogs wag their tails
+do dogs dream
+is a hot dog a sandwich
+what does a joke mean
+what makes a joke funny
+who is the funniest comedian
+what is the origin of the word joke
+why do we laugh
+is it true that goldfish have a three second memory
+is it true that we only use ten percent of our brain
+what is a fun fact about space
+what is an interesting fact about the ocean
+do you know the capital of canada
+do you know who won the match yesterday
+do you know how to cook biryani
+do you know any good recipes
+do you remember the movie titanic
+do you know a good place to eat
+do you know what a haiku is
+how do i make biryani
+how do i make tea
+how do i make pancakes
+how do i bake a cake
+what is the recipe for chicken karahi
+what are the ingredients of pizza dough
+# ---- longer or fuzzy things people say to an assistant
+i was thinking about getting a new phone but i can't decide which one
+my friend told me something strange today and i don't know what to think
+i have an exam tomorrow and i haven't studied anything
+i want to start learning something new this year
+i'm trying to decide what to study at university
+last night i watched a really interesting documentary about the ocean
+today was a long day at work and i'm exhausted
+we are planning a family trip next month
+i'm thinking of starting a small business
+i had a dream about flying last night
+can you recommend something to watch tonight
+let's talk about something interesting
+let's chat for a while
+i want to talk about my day
+i just want someone to talk to
+tell me something about pakistan
+what did you do today
+what are you doing right now
+what are you thinking about
+what's new
+what's happening in the world
+what's the news today
+what is the latest news about technology
+what happened in the world today
+is the sun a star
+is pluto a planet
+is the earth round
+is water wet
+is a tomato a fruit
+is it possible to travel faster than light
+is there life on other planets
+is the moon made of cheese
+are humans related to monkeys
+are there aliens
+are sharks dangerous
+can fish drown
+can dogs eat chocolate
+can you swim after eating
+can plants feel pain
+can i drink water before a blood test
+will it ever stop being hot in summer
+will robots take over the world
+will ai replace programmers
+did dinosaurs live with humans
+did you know that honey never spoils

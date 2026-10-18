@@ -1,0 +1,261 @@
+# Phrases for Jarvis's own language-understanding model (see training/train_nlu.py).
+#
+# Under each "## name" heading, write one thing a person might say, per line, in everyday words. The name is a kind of request
+# (the list is in JarvisAdvancedBot/NLU.py). You can add lines to any heading whenever you like, then run:
+#     python training/train_nlu.py
+# Lines starting with # are ignored. Keep a phrase under ONE heading only; the trainer complains about duplicates.
+
+## greet
+hello
+hi
+hey
+hey there
+hi there
+hello there
+yo
+hiya
+good morning
+good afternoon
+good evening
+good day
+morning
+evening
+assalam o alaikum
+salam
+assalamualaikum
+hello jarvis
+hi jarvis
+hey jarvis
+wake up
+are you there
+are you up
+are you awake
+you there
+anybody home
+is anyone there
+hello are you listening
+can you hear me
+hey buddy
+what's up
+sup
+wassup
+greetings
+hello again
+i'm back
+i am back
+hey i'm here
+is jarvis up and running
+is jarvis there
+are you up and running
+are you online
+are you working
+are you listening
+hello hello
+hey you
+hi there jarvis
+
+## how_are_you
+how are you
+how are you doing
+how are you today
+how's it going
+how is it going
+how do you do
+how have you been
+how are things
+how's life
+how r u
+how are you feeling
+are you ok
+are you okay
+are you fine
+are you well
+you good
+you doing okay
+how's everything
+how is everything going
+what's going on with you
+how's your day
+how is your day going
+hope you're doing well
+how you doing
+how are you jarvis
+are you doing alright
+is everything okay with you
+you alright
+how's it hanging
+how are you keeping
+are you feeling good today
+how's your day been
+how is your day
+how is life treating you
+how are you holding up
+
+## thanks
+thanks
+thank you
+thank you so much
+thanks a lot
+thanks jarvis
+thank you jarvis
+many thanks
+much appreciated
+i appreciate it
+appreciate it
+cheers
+great job
+good job
+well done
+nice work
+awesome thanks
+perfect thanks
+that's great thanks
+that was helpful
+that helped
+you're the best
+you are awesome
+brilliant
+excellent work
+wonderful
+cool thanks
+ok thanks
+okay thank you
+nice one
+thx
+ty
+thank u
+thanks buddy
+that's perfect
+that works
+got it thanks
+alright thanks
+great thank you very much
+that's all thanks
+no that's all thank you
+thanks for your help
+thank you for helping me
+thanks for that
+thank you very much
+good work jarvis
+you did great
+that was perfect
+really appreciate it
+thanks mate
+
+## who_are_you
+who are you
+what's your name
+what is your name
+tell me your name
+introduce yourself
+what are you
+what should i call you
+who am i talking to
+who is this
+who made you
+who created you
+who built you
+who is your creator
+what do they call you
+what are you called
+your name please
+may i know your name
+can you introduce yourself
+tell me about yourself
+who are you exactly
+are you jarvis
+is this jarvis
+are you a robot
+are you an ai
+are you a human
+what kind of assistant are you
+what do i call you
+state your name
+identify yourself
+who's speaking
+who am i speaking with
+who programmed you
+who developed you
+who invented you
+are you real
+what exactly are you
+are you a computer program
+are you a person or a machine
+what type of ai are you
+who do i have the pleasure of speaking to
+
+## my_name
+what's my name
+what is my name
+who am i
+do you know my name
+do you know who i am
+what do you call me
+tell me my name
+say my name
+what's my name again
+can you tell me my name
+do you remember my name
+remind me of my name
+what name do you have for me
+how do you address me
+what should you call me
+who do you think i am
+my name please
+hey what is my name
+do you know my name jarvis
+can you say my name
+what am i called
+do you know what my name is
+tell me who i am
+what's my name jarvis
+did you forget my name
+could you tell me my name
+what is the name of the user
+whose computer is this
+
+## help
+what can you do
+help
+help me
+what are your features
+what are your skills
+what are your commands
+what commands do you know
+show me what you can do
+list your features
+what do you do
+what are you capable of
+what are you able to do
+how can you help me
+how can you help
+what can i ask you
+what can i say
+what can i ask
+tell me what you can do
+what are your abilities
+what are your capabilities
+show commands
+show me your commands
+list of commands
+give me a list of commands
+what all can you do
+what else can you do
+how do i use you
+i need help
+i need some help
+can you help me
+how do i use jarvis
+what are the things you can do
+what features do you have
+what do you know how to do
+what are you good at
+show me your features
+which commands can i use
+what commands are available
+what can i tell you to do
+tell me your features
+give me a list of what you can do
+how can i use this assistant
+what is this assistant able to do
+what kind of things can you help with
