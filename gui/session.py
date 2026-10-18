@@ -62,7 +62,8 @@ def _default_listen_voice(timeout, phrase_time_limit):
 
 class SessionController(QObject):
     state_changed = pyqtSignal(str)       # locked | starting | ready | listening | working
-    said = pyqtSignal(str)                # something Jarvis said
+    said = pyqtSignal(str)                # something Jarvis said (a new message)
+    said_more = pyqtSignal(str)           # the next sentence of the reply Jarvis is still giving
     heard = pyqtSignal(str)               # a command from the user, typed or spoken
     log = pyqtSignal(str)                 # a line of console output
     problem = pyqtSignal(str)             # something the user should be told
@@ -82,7 +83,7 @@ class SessionController(QObject):
         self._listening = False
         self._state = "locked"
         self._state_lock = threading.Lock()
-        self._speech_listener = lambda text: self.said.emit(text)
+        self._speech_listener = self._on_speech
 
     # ---- what the window can ask for
 
@@ -131,6 +132,13 @@ class SessionController(QObject):
             self._hands_free.clear()
         self.hands_free_changed.emit(bool(on))
 
+    def reset_chat(self):
+        """Start a fresh conversation (the same as saying "new chat"). False if there is no session to receive it."""
+        if not self.running:
+            return False
+        self._commands.put("new chat")
+        return True
+
     def talk(self):
         """Push to talk: listen once by voice and submit what was said. False if already listening or not running."""
         if not self.running or not self._voice_busy.acquire(blocking=False):
@@ -141,7 +149,7 @@ class SessionController(QObject):
     # ---- the session thread
 
     def _run(self):
-        speech.add_listener(self._speech_listener)
+        speech.add_listener(self._speech_listener, streaming=True)
         outcome = "stopped"
         tee = _Tee(self.log.emit, sys.stdout)
         try:
@@ -157,6 +165,9 @@ class SessionController(QObject):
             self._phase = "ended"
             self._refresh()
             self.ended.emit(outcome)
+
+    def _on_speech(self, text, first=True):
+        (self.said if first else self.said_more).emit(text)
 
     def _next_command(self):
         """What the session calls to get the next command (it blocks until there is one)."""

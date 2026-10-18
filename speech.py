@@ -14,9 +14,11 @@ Every module that wants to say something imports it from here:
   reported once rather than on every sentence.
 * Every thread gets its own voice, because SAPI voices are COM objects that must stay on the thread that
   made them (the window speaks from a worker thread, reminders from a timer thread).
+* SpeakStream says a reply that is still being written, sentence by sentence, starting with the first one.
 
 Run `python speech.py` to check that Jarvis can speak.
 """
+import queue
 import sys
 import threading
 import time
@@ -25,6 +27,7 @@ from config import TTS_ENABLED, TTS_RATE, TTS_VOICE, TTS_VOLUME
 
 _local = threading.local()
 _listeners = []          # extra places a reply should appear, e.g. the GUI's conversation pane
+_streaming = set()       # the listeners that also want to know whether a line starts a new message or continues one
 _say_lock = threading.Lock()
 _reported = set()        # voice problems already shown, so one broken voice doesn't repeat itself
 
@@ -42,15 +45,33 @@ def _show(line):
         print(line.encode(encoding, errors="replace").decode(encoding))
 
 
-def add_listener(callback):
-    """Call ``callback(text)`` for every spoken line (the GUI uses this to show replies)."""
+def add_listener(callback, streaming=False):
+    """Call ``callback(text)`` for every spoken line (the GUI uses this to show replies).
+
+    With streaming=True it is called as ``callback(text, first)`` instead, where ``first`` is False for the second and
+    later sentences of one reply (see SpeakStream), so a window can show them as one message.
+    """
     if callback not in _listeners:
         _listeners.append(callback)
+    if streaming:
+        _streaming.add(callback)
 
 
 def remove_listener(callback):
     if callback in _listeners:
         _listeners.remove(callback)
+    _streaming.discard(callback)
+
+
+def _tell_listeners(text, first=True):
+    for callback in list(_listeners):
+        try:
+            if callback in _streaming:
+                callback(text, first)
+            else:
+                callback(text)
+        except Exception as e:                  # a faulty listener must never stop Jarvis talking
+            print(f": (output listener failed - {e})")
 
 
 def _create_voice():
@@ -101,13 +122,64 @@ def Speak(text):
     if not text:
         return
     _show(f"\nA.I : {text}\n")
-    for callback in list(_listeners):
-        try:
-            callback(text)
-        except Exception as e:                  # a faulty listener must never stop Jarvis talking
-            print(f": (output listener failed - {e})")
+    _tell_listeners(text)
     if TTS_ENABLED:
         _say(text)
+
+
+def Show(text):
+    """Put text in front of the user (the console and the window's conversation) without saying it: for what a voice can't
+    read aloud, such as an Urdu translation or a page of a book."""
+    text = str(text).strip()
+    if not text:
+        return
+    _show(f"\nA.I : {text}\n")
+    _tell_listeners(text)
+
+
+_DONE = object()
+
+
+def SpeakStream(sentences, if_slow=None, after=4.0):
+    """Say a reply that is still being written: ``sentences`` is any iterable (usually a generator) of sentences.
+
+    Speaking starts with the first sentence, while the next ones are still being produced on another thread. Listeners
+    get them as one message (see add_listener). If nothing has arrived after ``after`` seconds, ``if_slow`` is said once,
+    so a slow model isn't mistaken for a crash. Returns True if anything was said.
+    """
+    ready, problems = queue.Queue(), []
+
+    def produce():
+        try:
+            for sentence in sentences:
+                ready.put(sentence)
+        except BaseException as error:          # noqa: BLE001 - re-raised below, on the thread that is speaking
+            problems.append(error)
+        finally:
+            ready.put(_DONE)
+
+    threading.Thread(target=produce, name="reply-stream", daemon=True).start()
+    first, waited = True, False
+    while True:
+        try:
+            sentence = ready.get(timeout=after if (first and if_slow and not waited) else None)
+        except queue.Empty:
+            waited = True
+            Speak(if_slow)
+            continue
+        if sentence is _DONE:
+            break
+        sentence = str(sentence).strip()
+        if not sentence:
+            continue
+        _show(f"\nA.I : {sentence}\n" if first else f"      {sentence}\n")
+        _tell_listeners(sentence, first)
+        if TTS_ENABLED:
+            _say(sentence)
+        first = False
+    if problems:
+        raise problems[0]
+    return not first
 
 
 def check():

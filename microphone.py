@@ -23,7 +23,7 @@ import threading
 import speech_recognition as sr
 
 import winmm_mic
-from config import INPUT_MODE, MIC_BACKEND, MIC_DEVICE
+from config import INPUT_MODE, MIC_BACKEND, MIC_DEVICE, MIC_PAUSE
 from winmm_mic import MicrophoneError, WinMMMicrophone
 
 READ_TIMEOUT = 5       # seconds without audio before a backend is declared dead
@@ -310,7 +310,7 @@ def _ensure_ready():
         return True
     print(": Starting the microphone, stay quiet for a second...")
     recognizer = sr.Recognizer()
-    recognizer.pause_threshold = 1
+    recognizer.pause_threshold = MIC_PAUSE          # a pause to think is not the end of the sentence (it was 1 s, and cut some off)
     for _ in range(2):                  # the second pass runs after a failover
         try:
             with Microphone() as source:

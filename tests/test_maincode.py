@@ -5,6 +5,7 @@ Nothing here uses the microphone, speakers or network: speech, input and the too
 import datetime
 import io
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -14,8 +15,20 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import MainCode  # noqa: E402
+import transcript  # noqa: E402
 from anthropic.lib.tools import ToolError  # noqa: E402
 from JarvisAdvancedBot import tools as T  # noqa: E402
+from tests.isolation import no_language_model  # noqa: E402
+
+
+def setUpModule():
+    """Sessions write a conversation record; in these tests it goes to a temporary folder, never to the real Logs folder."""
+    no_language_model()
+    folder = tempfile.TemporaryDirectory()
+    unittest.addModuleCleanup(folder.cleanup)
+    patcher = mock.patch.object(transcript, "LOG_DIR", Path(folder.name))
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
 
 
 class GreetingTests(unittest.TestCase):
@@ -91,6 +104,7 @@ class SessionCase(unittest.TestCase):
             mock.patch.object(MainCode, "STARTUP_GREETING", mode),
             mock.patch.object(MainCode, "USER_NAME", "Mr Khan"),
             mock.patch("JarvisAdvancedBot.JarvisAiBrain.ai_available", return_value=False),
+            mock.patch("JarvisAdvancedBot.ChatBrain.available", return_value=False),       # not the Ollama that may be running here
         ]
         if handler is not None:
             patches.append(mock.patch.object(MainCode, "handle_command", handler))
@@ -179,13 +193,49 @@ class CommandLoopTests(SessionCase):
         self.assertTrue(thread.call_args.kwargs["daemon"])
         thread.return_value.start.assert_called_once()
 
+    def test_the_chat_model_is_only_loaded_ahead_of_time_when_the_setting_says_so(self):
+        for setting, loaded in ((False, 0), (True, 1)):
+            with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch.object(MainCode, "CHAT_PRELOAD", setting), \
+                    mock.patch("JarvisAdvancedBot.ChatBrain.warm_up") as warm_up:
+                MainCode._prewarm()
+                thread.call_args.kwargs["target"]()                      # run the background job now
+            self.assertEqual(warm_up.call_count, loaded, setting)
+
+    def test_the_language_model_is_loaded_in_the_background_while_the_greeting_is_spoken(self):
+        with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch("JarvisAdvancedBot.NLU.warm_up") as warm_up:
+            MainCode._prewarm()
+            warm_up.assert_not_called()                                  # only the background job loads it
+            thread.call_args.kwargs["target"]()
+        warm_up.assert_called_once()
+
+    def test_the_session_says_which_brain_it_is_using(self):
+        for chat, expected in ((True, "chat with llama3.2:3b"), (False, "no chat model running")):
+            out = io.StringIO()
+            with mock.patch("JarvisAdvancedBot.JarvisAiBrain.ai_available", return_value=False), \
+                    mock.patch("JarvisAdvancedBot.ChatBrain.available", return_value=chat), \
+                    mock.patch("JarvisAdvancedBot.ChatBrain.choose_model", return_value="llama3.2:3b"), redirect_stdout(out):
+                MainCode._announce_brain()
+            self.assertIn(expected, out.getvalue())
+            self.assertIn("free local commands", out.getvalue())
+
 
 class DispatcherTests(unittest.TestCase):
-    def handle(self, text, ai=False, brain_reply="Hello from Claude."):
-        spoken = []
+    def handle(self, text, ai=False, brain_reply="Hello from Claude.", chat=None, loaded=False):
+        """Run one command. ``chat`` is the sentences a running chat model would say (None = no chat model running)."""
+        spoken, self.streamed = [], []
+
+        def speak_stream(sentences, **kwargs):
+            self.streamed.append(list(sentences))
+            self.stream_options = kwargs
+            return bool(self.streamed[-1])
+
         with mock.patch("JarvisAdvancedBot.JarvisAiBrain.ai_available", return_value=ai), \
                 mock.patch("JarvisAdvancedBot.JarvisAiBrain.ReplyBrain", return_value=brain_reply) as reply, \
                 mock.patch("JarvisAdvancedBot.JarvisAiBrain.ResetBrain") as reset, \
+                mock.patch("JarvisAdvancedBot.ChatBrain.available", return_value=chat is not None),                 mock.patch("JarvisAdvancedBot.ChatBrain.is_loaded", return_value=loaded), \
+                mock.patch("JarvisAdvancedBot.ChatBrain.reply_sentences", side_effect=lambda query: iter(chat or [])) as self.chat_asked, \
+                mock.patch("JarvisAdvancedBot.ChatBrain.forget") as self.chat_forgotten, \
+                mock.patch.object(MainCode, "SpeakStream", side_effect=speak_stream), \
                 mock.patch.object(MainCode, "Speak", spoken.append), mock.patch("builtins.print"):
             outcome = MainCode.handle_command(text, ask=lambda question: "")
         return outcome, spoken, reply, reset
@@ -201,6 +251,117 @@ class DispatcherTests(unittest.TestCase):
         with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value="Because of scattering."):
             _, spoken, _, _ = self.handle("blorp why is the sky blue zzz")
         self.assertEqual(spoken, ["Because of scattering."])
+
+    def test_a_running_chat_model_answers_what_no_command_covers_sentence_by_sentence(self):
+        outcome, spoken, _, _ = self.handle("blorp why is the sky blue zzz", chat=["Because of scattering.", "Blue light bends most."])
+        self.assertIsNone(outcome)
+        self.assertEqual(self.streamed, [["Because of scattering.", "Blue light bends most."]])
+        self.assertEqual(spoken, [])                                     # SpeakStream said it, so it is not said again
+        self.assertEqual(self.stream_options, {"if_slow": "One moment, sir.", "after": 3.0})      # the model has to load first
+        self.chat_asked.assert_called_once_with("blorp why is the sky blue zzz")
+
+    def test_how_long_the_answer_took_is_printed_once_it_has_been_said(self):
+        out = io.StringIO()
+        with mock.patch("JarvisAdvancedBot.ChatBrain.available", return_value=True),                 mock.patch("JarvisAdvancedBot.ChatBrain.is_loaded", return_value=True),                 mock.patch("JarvisAdvancedBot.ChatBrain.reply_sentences", return_value=iter(["Because."])),                 mock.patch("JarvisAdvancedBot.ChatBrain.last_timing", ": (chat: test - took 1s)"),                 mock.patch.object(MainCode, "SpeakStream", return_value=True), redirect_stdout(out):
+            self.assertTrue(MainCode._chat("why"))
+        self.assertIn(": (chat: test - took 1s)", out.getvalue())
+
+    def test_a_model_that_is_already_loaded_is_given_longer_before_jarvis_says_one_moment(self):
+        self.handle("blorp why is the sky blue zzz", chat=["Because of scattering."], loaded=True)
+        self.assertEqual(self.stream_options["after"], 8.0)
+
+    def test_a_sentence_that_was_cut_off_is_not_given_to_the_chat_model_to_invent_an_answer_for(self):
+        for said in ("can you", "ok can you tell me the square root of", "cube root of", "what is your"):
+            outcome, spoken, _, _ = self.handle(said, chat=["Never said."])
+            self.assertIsNone(outcome)
+            self.assertEqual(spoken, ["Sorry sir, I only caught part of that. Could you say it again?"], said)
+            self.chat_asked.assert_not_called()
+
+    def test_cut_off_sentences_get_the_same_answer_when_no_chat_model_is_running(self):
+        self.assertEqual(self.handle("can you")[1], ["Sorry sir, I only caught part of that. Could you say it again?"])
+
+    def test_a_command_that_ends_in_a_small_word_is_still_a_command(self):
+        spoken = self.handle("what's the weather in", chat=["Never said."])[1]
+        self.assertNotIn("only caught part", " ".join(spoken))
+
+    def test_the_throat_clearing_in_front_of_a_question_is_not_what_the_model_is_asked(self):
+        self.handle("ok how much is there distance zzz", chat=["It depends."])
+        self.chat_asked.assert_called_once_with("ok how much is there distance zzz")        # (the chat brain itself tidies it)
+
+    def test_two_commands_joined_by_then_are_both_carried_out_in_order(self):
+        outcome, spoken, _, _ = self.handle("what time is it then what is the date")
+        self.assertIsNone(outcome)
+        self.assertEqual(len(spoken), 2)
+        self.assertTrue(spoken[0].startswith("It's "))
+        self.assertTrue(spoken[1].startswith("Today is "))
+
+    def test_then_go_to_sleep_ends_the_session_after_the_first_part_and_nothing_follows(self):
+        outcome, spoken, _, _ = self.handle("what time is it then go to sleep then what is the date")
+        self.assertEqual(outcome, "sleep")
+        self.assertEqual(len(spoken), 2)                                         # the time, and the goodbye; not the date
+        self.assertIn("Going to sleep", spoken[1])
+
+    def test_the_whole_sentence_is_recorded_once_not_once_per_part(self):
+        recorded = []
+        with mock.patch.object(MainCode.transcript, "record", side_effect=lambda who, text, **kw: recorded.append((who, text))):
+            self.handle("what time is it then what is the date")
+        self.assertEqual(recorded, [("you", "what time is it then what is the date")])
+
+    def test_with_claude_a_then_is_left_for_claude_to_understand(self):
+        _, spoken, reply, _ = self.handle("what time is it then what is the date", ai=True)
+        reply.assert_called_once_with("what time is it then what is the date")
+
+    def test_questions_about_the_users_own_list_or_schedule_are_never_made_up_by_the_chat_model(self):
+        for said in ("skechers vibrate for tomorrow then what's on my today list for tomorrow", "what's on my calendar tomorrow",
+                     "do i have any appointments today"):
+            outcome, spoken, _, _ = self.handle(said, chat=["Your list includes: wake up, breakfast, lunch."])
+            self.assertIsNone(outcome)
+            self.assertEqual(len(spoken), 1, said)
+            self.assertIn("I won't guess what is on it", spoken[0])
+            self.assertIn("what's on my to do list", spoken[0])
+            self.chat_asked.assert_not_called()
+
+    def test_general_talk_about_schedules_and_lists_is_still_for_the_chat_model(self):
+        for said in ("what's a good study schedule for the week", "list the planets in order", "any advice for planning my day"):
+            self.handle(said, chat=["Here is some advice."])
+            self.chat_asked.assert_called_with(said)
+
+    def test_a_command_never_goes_to_the_chat_model(self):
+        _, spoken, _, _ = self.handle("what time is it", chat=["Never said."])
+        self.chat_asked.assert_not_called()
+        self.assertTrue(spoken[0].startswith("It's "))
+
+    def test_if_the_chat_model_has_nothing_to_say_the_other_brains_answer(self):
+        with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value="From the cloud or the web."):
+            _, spoken, _, _ = self.handle("blorp why is the sky blue zzz", chat=[])
+        self.assertEqual(spoken, ["From the cloud or the web."])
+
+    def test_with_no_chat_model_running_it_is_not_asked(self):
+        with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value="Web answer."):
+            self.handle("blorp why is the sky blue zzz")
+        self.chat_asked.assert_not_called()
+
+    def test_a_fresh_start_clears_the_conversation_without_claude_too(self):
+        for phrase in ("new chat", "start a new conversation", "forget everything", "clear your memory", "ok can you clear the chat",
+                       "Jarvis, please start a fresh chat", "could you reset the conversation please", "start over", "wipe the history"):
+            _, spoken, reply, _ = self.handle(phrase, chat=["Never said."])
+            self.assertIn("Fresh start", spoken[0], phrase)
+            self.chat_forgotten.assert_called_once()
+            self.chat_asked.assert_not_called()
+            reply.assert_not_called()
+
+    def test_forgetting_what_the_user_told_it_is_not_mistaken_for_a_fresh_start(self):
+        _, spoken, _, _ = self.handle("forget everything you know about me", chat=["Never said."])
+        self.chat_forgotten.assert_not_called()
+        self.assertNotIn("Fresh start", " ".join(spoken))
+
+    def test_the_hint_to_set_up_a_chat_model_goes_away_once_one_is_running(self):
+        for running, hinted in ((True, False), (False, True)):
+            with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value=None), \
+                    mock.patch("JarvisAdvancedBot.FreeBrain.available", return_value=False), \
+                    mock.patch("JarvisAdvancedBot.ChatBrain.available", return_value=running):
+                reply = MainCode._answer_anything("calculater please")
+            self.assertEqual("install the free Ollama" in reply, hinted, running)
 
     def test_very_short_noise_is_ignored(self):
         _, spoken, _, _ = self.handle("uh")

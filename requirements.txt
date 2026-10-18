@@ -1,10 +1,16 @@
 # New Jarvis - Windows, Python 3.14:   pip install -r requirements.txt
 # Every package below is imported by the project, and nothing else is needed.
 
-# ---- Settings and the two brains
+# ---- Settings and the brains
 python-dotenv>=1.0
 requests>=2.32
 anthropic>=1.15                 # the tools use its decorator; Claude itself is only called when ANTHROPIC_API_KEY is set
+ollama>=0.6                     # chat with a free model running on this PC (install Ollama itself from ollama.com)
+ddgs>=9.16                      # DuckDuckGo search, to look facts up before the chat model answers
+
+# ---- Jarvis's own language model (training/train_nlu.py teaches it; JarvisAdvancedBot/NLU.py uses it)
+scikit-learn>=1.5
+joblib>=1.4
 
 # ---- Voice in and out. There is deliberately no PyAudio: it has no Python 3.14 wheel.
 SpeechRecognition>=3.14
@@ -22,14 +28,13 @@ pyautogui>=0.9.54
 plyer>=2.1                      # desktop notifications for reminders
 
 # ---- Features
-pywhatkit>=5.4                  # plays a YouTube video
 deep-translator>=1.9
 pypdf>=5.0                      # reads PDF books
 yt-dlp                          # downloads YouTube videos; update it with: pip install -U yt-dlp
 instaloader>=4.14
 
 # ---- Face check after the password (optional: without it Jarvis says it couldn't confirm your face)
-opencv-contrib-python>=4.9
+opencv-contrib-python>=4.9,<5   # NOT 5: OpenCV 5.0 removed the face detector and recogniser this check needs
 numpy
 
 # ---- The window and its small tools

@@ -6,6 +6,7 @@ patterns, which decides what wins when two could match) without doing anything r
 import datetime
 import io
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -39,9 +40,13 @@ class BrainCase(unittest.TestCase):
             mock.patch.object(L, "HOME_CURRENCY", "PKR"),
             mock.patch.object(L, "DEFAULT_CITY", "Peshawar"),
             mock.patch.object(L.FreeBrain, "available", return_value=False),     # a real key in .env must not change routing
+            mock.patch.object(L.ChatBrain, "available", return_value=False),     # nor must an Ollama that happens to be running
+            mock.patch.object(L.NLU, "MODEL_FILE", Path("no such language model.joblib")),     # nor a model trained on this PC
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
+        L.NLU.reset()
+        self.addCleanup(L.NLU.reset)
         self.spoken = sys.modules["speech"].Speak
 
     def say(self, phrase, answers=()):
@@ -86,7 +91,9 @@ class EverydayCommandTests(BrainCase):
 
     def test_greetings_and_help(self):
         self.assertTrue(self.no_tool("hello"))
-        self.assertIn("space station", self.no_tool("what can you do"))
+        reply = self.no_tool("what can you do")
+        self.assertIn("chat about almost anything", reply)
+        self.assertLess(len(reply), 260)                                  # it used to be 400 characters: 25 seconds of talking
 
     def test_reminders(self):
         self.routes("remind me in 10 minutes to drink water", "set_reminder", message="drink water", minutes_from_now=10.0)
@@ -173,7 +180,12 @@ class EverydayCommandTests(BrainCase):
         reply = self.routes("translate good morning to urdu", "translate_text", "good morning", "urdu")
         self.assertEqual(reply, "In Urdu, that's: <translate_text>")
         self.results["translate_text"] = "صبح بخیر"
-        self.assertIn("written the Urdu translation on the screen", self.say("translate good morning to urdu"))
+        shown = []
+        with mock.patch("speech.Show", side_effect=shown.append):
+            reply = self.say("translate good morning to urdu")
+        self.assertEqual(reply, "")                                       # what is said is the heads-up; the Urdu is only shown
+        self.assertEqual(shown, ["صبح بخیر"])
+        self.assertIn("Here is the Urdu translation, sir.", [call.args[0] for call in self.spoken.call_args_list])
 
     def test_apps_and_websites(self):
         self.routes("open chrome", "open_app", "chrome")
@@ -199,13 +211,248 @@ class EverydayCommandTests(BrainCase):
         self.assertIsNone(self.no_tool(""))
 
 
+class NameTests(BrainCase):
+    def test_jarvis_knows_the_name_it_was_given_without_asking_a_model(self):
+        with mock.patch.object(L.config, "USER_NAME", "Mr Khan"):
+            for phrase in ("what is my name", "what's my name", "who am i", "do you know my name", "what do you call me"):
+                self.assertEqual(self.no_tool(phrase), "You're Mr Khan, sir.", phrase)
+
+    def test_asking_for_jarvis_own_name_is_still_a_different_question(self):
+        self.assertIn("I'm Jarvis", self.no_tool("what is your name"))
+
+
+class ChatRoutingTests(BrainCase):
+    """With a chat model running, open questions are left for it to answer (MainCode speaks the answer as it arrives)."""
+
+    def test_open_questions_are_left_for_the_chat_model(self):
+        with mock.patch.object(L.ChatBrain, "available", return_value=True):
+            self.assertIsNone(self.no_tool("who is albert einstein"))
+            self.assertIsNone(self.no_tool("tell me about the roman empire"))
+            self.assertIsNone(self.no_tool("what is the best way to learn python"))
+
+    def test_an_explicit_wikipedia_request_still_goes_to_wikipedia(self):
+        with mock.patch.object(L.ChatBrain, "available", return_value=True):
+            self.routes("wikipedia alan turing", "search_wikipedia", "alan turing")
+            self.routes("wikipedia for the roman empire", "search_wikipedia", "the roman empire")
+
+    def test_commands_are_never_sent_to_the_chat_model(self):
+        with mock.patch.object(L.ChatBrain, "available", return_value=True):
+            self.routes("what's the weather in london", "weather_report", "london")
+            self.assertIn("It's", self.no_tool("what time is it"))
+
+    def test_without_a_chat_model_a_cloud_key_still_answers_before_wikipedia(self):
+        with mock.patch.object(L.FreeBrain, "available", return_value=True),                 mock.patch.object(L.FreeBrain, "ask_model", return_value="From the cloud.") as cloud:
+            self.assertEqual(self.no_tool("who is albert einstein"), "From the cloud.")
+        cloud.assert_called_once()
+
+
+class MemoryCommandTests(BrainCase):
+    def setUp(self):
+        super().setUp()
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        patcher = mock.patch.object(L.ChatBrain, "FACTS_FILE", Path(folder.name) / "memory.json")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_remember_that_keeps_a_fact_with_the_capital_letters_it_was_said_with(self):
+        self.assertEqual(self.no_tool("Remember that my brother's name is Ali"), "Okay sir, I'll remember that.")
+        self.assertEqual(L.ChatBrain.facts(), ["my brother's name is Ali"])
+        self.no_tool("remember my sister Sana lives in Lahore")
+        self.assertEqual(L.ChatBrain.facts()[-1], "my sister Sana lives in Lahore")
+
+    def test_remember_that_is_no_longer_a_note_but_taking_a_note_still_is(self):
+        self.no_tool("remember that the wifi password is on the fridge")
+        self.assertFalse(any(name == "take_note" for name, _, _ in self.calls))
+        self.routes("take a note that buy milk", "take_note", "buy milk")
+
+    def test_a_fact_never_swallows_the_command_said_after_then(self):
+        reply = self.no_tool("remember that my favourite fruit is mango, then what do you remember about me new chat")
+        self.assertEqual(L.ChatBrain.facts(), ["my favourite fruit is mango"])
+        self.assertIn("Okay sir, I'll remember that.", reply)
+        self.assertIn("didn't catch what you said after 'then'", reply)
+
+    def test_a_fact_without_then_is_kept_whole_and_gets_no_apology(self):
+        self.assertEqual(self.no_tool("remember that my brother is Ali"), "Okay sir, I'll remember that.")
+        self.assertEqual(L.ChatBrain.facts(), ["my brother is Ali"])
+
+    def test_remember_to_do_something_is_not_a_fact(self):
+        self.say("remember to call Ali")
+        self.assertEqual(L.ChatBrain.facts(), [])
+
+    def test_jarvis_can_say_what_it_remembers(self):
+        self.assertIn("haven't asked me to remember anything", self.no_tool("what do you remember about me"))
+        L.ChatBrain.remember("I like tea")
+        L.ChatBrain.remember("my brother is Ali")
+        for phrase in ("what do you remember about me", "what do you know about me", "what have I told you to remember",
+                       "list my facts"):
+            self.assertEqual(self.no_tool(phrase), "You asked me to remember: I like tea; my brother is Ali.", phrase)
+
+    def test_a_long_list_of_facts_is_summarised(self):
+        for n in range(9):
+            L.ChatBrain.remember(f"fact {n}")
+        reply = self.no_tool("what do you remember")
+        self.assertIn("fact 8", reply)
+        self.assertNotIn("fact 0", reply)
+        self.assertIn("and 3 more", reply)
+
+    def test_one_fact_can_be_forgotten_by_what_it_mentions(self):
+        L.ChatBrain.remember("my brother is Ali")
+        L.ChatBrain.remember("I like tea")
+        self.assertEqual(self.no_tool("forget that my brother is Ali"), "Forgotten, sir.")
+        self.assertEqual(L.ChatBrain.facts(), ["I like tea"])
+        self.assertIn("don't have anything like that", self.no_tool("forget my favourite colour"))
+
+    def test_all_facts_can_be_forgotten(self):
+        L.ChatBrain.remember("one")
+        L.ChatBrain.remember("two")
+        for phrase in ("forget my facts", "forget everything you know about me", "clear all memories"):
+            L.ChatBrain.remember("one")
+            L.ChatBrain.remember("two")
+            self.assertIn("forgotten 2 things", self.no_tool(phrase), phrase)
+        self.assertIn("wasn't remembering anything", self.no_tool("forget my facts"))
+
+
+class RealSessionFixesTests(BrainCase):
+    """Each of these was said in a real session and was misunderstood or answered with an invention."""
+
+    def tomorrow(self):
+        return (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+
+    def test_i_mean_and_other_throat_clearing_in_front_of_a_command_is_ignored(self):
+        self.assertEqual(L.normalize("ok sorry, i mean open the windows calendar"), "open the windows calendar")
+        self.assertEqual(L.normalize("I mean can you write a note"), "write a note")
+        self.assertEqual(L.normalize("well done"), "well done")                              # words that mean something stay
+        self.routes("i mean can you write a note", "take_note", "buy milk", answers=["buy milk"])
+
+    def test_jarvis_heard_as_assistant_and_a_repeat_after_a_miss_are_still_the_command(self):
+        self.assertEqual(L.normalize("assistant calendar"), "calendar")
+        self.assertEqual(L.normalize("hey assistant, open the calculator"), "open the calculator")
+        self.assertEqual(L.normalize("i told you system calendar"), "system calendar")
+        self.assertEqual(L.normalize("i said open the note"), "open the note")
+        self.assertEqual(L.normalize("what is an assistant professor"), "what is an assistant professor")     # only at the start
+        self.routes("assistant calendar", "open_utility_app", "calendar")
+        self.routes("i told you system calendar", "open_app", "calendar")
+
+    def test_the_windows_calendar_and_calculator_can_be_asked_for_with_or_without_a_verb(self):
+        self.routes("system calendar", "open_app", "calendar")
+        self.routes("i mean can you open the windows calendar", "open_app", "calendar")
+        self.routes("can you open the system calculator", "open_app", "calculator")
+        self.routes("windows calculator", "open_app", "calculator")
+        self.routes("open the jarvis calendar", "open_utility_app", "calendar")
+
+    def test_the_state_of_the_pc_is_a_report_not_a_guess(self):
+        for phrase in ("what's the current status of pc", "how is my pc doing", "what is the health of my computer", "how's my laptop"):
+            self.routes(phrase, "get_system_status")
+
+    def test_the_space_station_as_it_is_often_misheard_and_the_latest_launches_in_the_plural(self):
+        self.routes("where is is", "get_iss_location")
+        self.routes("where is the ISS", "get_iss_location")
+        self.routes("can you tell me the latest spacex launches", "spacex_latest_launch", "latest")
+        self.routes("when are the next spacex launches", "spacex_latest_launch", "next")
+
+    def test_questions_about_jarvis_own_password_are_never_answered_by_a_model_or_a_generator(self):
+        for phrase in ("what's the current password of jarvis program", "tell me the jarvis password", "what is my unlock password",
+                       "i forgot my login password"):
+            reply = self.no_tool(phrase)
+            self.assertIn("python gate.py --set-password", reply, phrase)
+        self.routes("generate a password", "generate_password", 16)
+        self.routes("give me a strong password", "generate_password", 16)
+        self.assertNotIn("set-password", self.say("what is a good password for my bank") or "")      # advice: not the guard's business
+
+    def test_passwords_and_card_numbers_are_not_kept_as_facts(self):
+        for phrase in ("remember that my wifi password is hunter2", "remember my pin is 1234", "remember that my card number is 4111"):
+            self.assertIn("rather not keep passwords", self.no_tool(phrase), phrase)
+
+    def test_scheduling_a_task(self):
+        self.routes("ok schedule a task", "add_task", "return the book", answers=["return the book"])       # asks what the task is
+        self.assertEqual(self.questions, ["What's the task?"])
+        self.routes("schedule return statement i will complete my assignment by tomorrow", "add_task",
+                    "return statement i will complete my assignment", self.tomorrow())
+        self.routes("schedule buy bread", "add_task", "buy bread", "")
+        today = datetime.date.today()
+        friday = (today + datetime.timedelta(days=(4 - today.weekday()) % 7 or 7)).isoformat()
+        self.routes("schedule dentist on friday", "add_task", "dentist", friday)
+
+    def test_asking_for_the_tasks_of_a_day(self):
+        self.routes("can you check what task was casual for tomorrow", "list_tasks", self.tomorrow())
+        self.routes("what's on my to do list for tomorrow", "list_tasks", self.tomorrow())
+        self.routes("what task was scheduled", "list_tasks")
+        self.routes("can you check my task and schedule", "list_tasks")
+        self.routes("what's on my to do list", "list_tasks")
+
+    def test_opening_a_note_is_not_reading_it(self):
+        self.routes("can you open the note", "open_notes", "latest")
+        self.routes("open note", "open_notes", "latest")
+        self.routes("open the note file", "open_notes", "latest")
+        self.routes("open my latest note", "open_notes", "latest")
+        self.routes("open the notes", "open_notes", "folder")                    # all of them: the folder
+        self.routes("open the notes folder", "open_notes", "folder")
+        self.routes("open my notes app", "open_notes", "folder")
+        self.assertEqual(self.say("open the note file"), "<open_notes>, sir.")
+        self.routes("can you show me the saved note", "read_notes", "")
+        self.routes("read my last note", "read_notes", "", True)
+
+    def test_asking_where_the_screenshot_is_does_not_take_another_one(self):
+        self.routes("screenshot", "take_screenshot")
+        self.routes("take a screenshot", "take_screenshot")
+        self.routes("capture the screen", "take_screenshot")
+        self.assertIn("screenshots folder", self.routes("where is the screenshot was saved", "open_screenshots", "folder"))
+        self.routes("where are my screenshots", "open_screenshots", "folder")
+        self.routes("open the screenshot", "open_screenshots", "latest")
+        self.routes("show me the last screenshot", "open_screenshots", "latest")
+        self.routes("open the screenshots", "open_screenshots", "folder")
+
+    def test_is_it_am_or_pm(self):
+        for phrase in ("is it am or pm", "am or pm", "a.m. or p.m.", "is it a.m. or p.m.", "is it morning", "what part of the day is it"):
+            self.assertRegex(self.no_tool(phrase), r"^It's \d{1,2}:\d\d [AP]M, so it's (?:morning|afternoon|evening|night), sir\.$")
+
+    def test_cube_roots_are_worked_out_not_guessed(self):
+        self.assertEqual(self.no_tool("i mean cube root of 215"), "That's 5.990726.")                 # a model said 6.013
+        self.assertEqual(self.no_tool("what is the cube root of 27"), "That's 3.")
+        self.assertEqual(self.no_tool("cube root of 8"), "That's 2.")
+        self.assertEqual(self.no_tool("square root of 6000"), "That's 77.459667.")
+
+    def test_a_place_with_its_country_goes_to_the_weather_tool_whole(self):
+        self.routes("what's the weather in narayan khan in pakistan", "weather_report", "narayan khan in pakistan")
+
+    def test_a_short_acknowledgement_is_not_a_question_for_a_model(self):
+        for phrase in ("ok perfect", "awesome", "got it", "alright"):
+            self.assertIn(self.no_tool(phrase), ("You're welcome, sir.", "Always a pleasure, sir.", "Happy to help."), phrase)
+
+
+class TwoCommandsInOneBreathTests(BrainCase):
+    """"Do this, then that": split only when every piece is something Jarvis understands."""
+
+    def test_pieces_joined_by_then_are_run_one_after_the_other(self):
+        self.assertEqual(L.split_commands("schedule buy bread for tomorrow then what's on my to do list for tomorrow"),
+                         ["schedule buy bread for tomorrow", "what's on my to do list for tomorrow"])
+        self.assertEqual(L.split_commands("what time is it and then what is the date"), ["what time is it", "what is the date"])
+        self.assertEqual(L.split_commands("take a screenshot, then open the note, then go to sleep"),
+                         ["take a screenshot", "open the note", "go to sleep"])
+        self.assertEqual(L.split_commands("tell me a joke after that play despacito"), ["tell me a joke", "play despacito"])
+
+    def test_a_sentence_that_only_contains_then_stays_whole(self):
+        for text in ("tell me what happens then", "if it rains then what", "and then", "then", "what is the capital of france",
+                     "blorp zzz then qqq yyy", "write a note then sing me a song about clouds"):
+            self.assertEqual(L.split_commands(text), [text], text)
+
+    def test_understanding_is_about_commands_not_questions(self):
+        self.assertTrue(L.understands("what's on my to do list"))
+        self.assertTrue(L.understands("ok take a screenshot"))
+        self.assertTrue(L.understands("go to sleep"))
+        self.assertTrue(L.understands("new chat"))
+        self.assertFalse(L.understands("who is alan turing"))                    # that is the catch-all question pattern
+        self.assertFalse(L.understands("blorp zzz"))
+        self.assertFalse(L.understands(""))
+
+
 class ForgivingPhrasingTests(BrainCase):
     """Phrasings people (and the speech recogniser) actually produce for things Jarvis already does."""
 
     def test_notes_in_every_shape(self):
-        for phrase in ("show note", "show notes", "open note", "open the notes", "read note", "notes", "note", "my notes",
-                       "jarvis notes", "what notes do i have", "do i have any notes", "see my notes", "check my notes",
-                       "open my notes app"):
+        for phrase in ("show note", "show notes", "read note", "notes", "note", "my notes",
+                       "jarvis notes", "what notes do i have", "do i have any notes", "see my notes", "check my notes"):
             self.routes(phrase, "read_notes", "")
 
     def test_the_latest_note(self):
@@ -387,7 +634,32 @@ class ProductivityTests(BrainCase):
 
     def test_wolfram(self):
         self.routes("wolfram distance from earth to mars", "ask_wolfram_alpha", "distance from earth to mars")
-        self.routes("convert 5 miles to kilometres", "ask_wolfram_alpha", "5 miles to kilometres")
+        self.routes("convert the population of france to a number", "ask_wolfram_alpha", "the population of france to a number")
+
+
+class UnitConversionTests(BrainCase):
+    """Everyday conversions are worked out here, offline; Wolfram Alpha is only for what these cannot do."""
+
+    def test_common_conversions_need_no_tool_and_no_key(self):
+        for phrase, expected in (("convert 5 miles to kilometres", "5 miles is 8.0467 kilometres."),
+                                 ("5 miles in kilometres", "5 miles is 8.0467 kilometres."),
+                                 ("what is 100 kg in pounds", "100 kilograms is 220.46 pounds."),
+                                 ("how many feet in a mile", "1 mile is 5,280 feet."),
+                                 ("how many centimetres are in an inch", "1 inch is 2.54 centimetres."),
+                                 ("convert 1,000 metres to miles", "1,000 metres is 0.621371 miles."),
+                                 ("three gallons to litres", "3 gallons is 11.3562 litres."),
+                                 ("what is 72 fahrenheit in celsius", "72 fahrenheit is 22.2222 celsius."),
+                                 ("convert 0 celsius to kelvin", "0 celsius is 273.15 kelvin."),
+                                 ("ten kilometres per hour to miles per hour", "10 kilometres per hour is 6.2137 miles per hour.")):
+            self.assertEqual(self.no_tool(phrase), expected, phrase)
+
+    def test_things_that_cannot_be_compared_are_explained(self):
+        self.assertEqual(self.no_tool("5 kilograms to metres"), "Kilograms and metres measure different things, sir.")
+
+    def test_money_is_still_money_and_the_rest_still_goes_to_wolfram(self):
+        self.routes("convert the population of france to a number", "ask_wolfram_alpha", "the population of france to a number")
+        reply = self.say("100 dollars in rupees")
+        self.assertNotIn("measure different things", reply or "")
 
 
 class WorldTests(BrainCase):
@@ -506,6 +778,162 @@ class FailureTests(BrainCase):
             reply = self.say("tell me a joke")
         self.assertIn("didn't work", reply)
         self.assertIn("kaboom", errors.getvalue())
+
+
+class ExplanationTests(BrainCase):
+    def test_a_question_about_the_difference_between_things_is_left_for_the_chat_brain(self):
+        for phrase in ("what is the difference between a comet and an asteroid", "what's the difference between weather and climate",
+                       "what are the differences between mars and venus"):
+            self.assertIsNone(self.no_tool(phrase), phrase)
+
+    def test_asking_what_a_thing_is_or_how_it_works_does_not_run_the_command_it_is_named_after(self):
+        for phrase in ("what is a screenshot", "how does a battery work", "explain how a battery works", "what is a cpu",
+                       "how does ram work", "what does the ram do in a computer", "why do people get bored",
+                       "how do i take a screenshot on a mac", "what is an asteroid", "how do airplanes stay in the air",
+                       "why is my laptop battery draining so fast", "how can i check my battery on a phone"):
+            self.assertIsNone(self.no_tool(phrase), phrase)
+
+    def test_the_same_words_as_a_request_still_run_the_command(self):
+        self.routes("take a screenshot", "take_screenshot")
+        self.routes("what's on my to do list for tomorrow", "list_tasks", L._day_from_word("tomorrow"))
+        self.routes("how do you say good morning in urdu", "translate_text", "good morning", "urdu")
+        self.routes("weather in london", "weather_report", "london")
+        self.assertIn("I'm speaking now", self.no_tool("why are you not speaking"))      # the voice check starts with "why are"
+
+    def test_other_questions_that_mention_a_difference_still_work(self):
+        self.assertIn("It's", self.no_tool("what's the time difference"))                       # "what's the time" is still the time
+        self.routes("weather in london", "weather_report", "london")
+
+
+class TemperatureTests(BrainCase):
+    def test_asking_for_the_temperature_is_asking_for_the_weather(self):
+        for phrase, place in (("temperature", "Peshawar"), ("what's the temperature", "Peshawar"),
+                              ("what is the temperature outside", "Peshawar"), ("what's the temperature like", "Peshawar"),
+                              ("how's the temperature", "Peshawar"), ("tell me the temperature", "Peshawar"),
+                              ("current temperature", "Peshawar"), ("temperature right now", "Peshawar"),
+                              ("what is the temperature here", "Peshawar"), ("what's the temperature in london", "london"),
+                              ("temperature in lahore today", "lahore")):
+            self.routes(phrase, "weather_report", place)
+
+    def test_the_word_in_a_general_question_does_not_fetch_the_weather(self):
+        for phrase in ("what is the difference between heat and temperature", "at what temperature does water boil",
+                       "what is body temperature", "what temperature should the oven be", "what is the temperature of the human body",
+                       "what is the difference between weather and climate"):
+            self.say(phrase)
+            self.assertNotIn("weather_report", [name for name, _, _ in self.calls], phrase)
+
+    def test_the_temperature_of_a_planet_is_still_about_the_planet(self):
+        self.routes("what is the temperature of mars", "nasa_solar_body_facts", "mars", "temperature")
+
+
+class BrowserHistoryTests(BrainCase):
+    def test_asking_for_the_history_of_something_is_a_question_not_a_browser_shortcut(self):
+        for phrase in ("what is the history of mexico", "tell me about the history of the roman empire",
+                       "history of pakistan", "why is the history of art important"):
+            self.say(phrase)
+            self.assertNotIn("browser_action", [name for name, _, _ in self.calls], phrase)
+
+    def test_the_browsers_own_history_page_still_opens(self):
+        for phrase in ("history", "open history", "show my browsing history", "browser history", "open the chrome history",
+                       "go to my history page"):
+            self.routes(phrase, "browser_action", "history")
+
+
+class LanguageModelTests(BrainCase):
+    """The language model trained on this PC is the second chance for a sentence no pattern understands."""
+
+    def model_says(self, family, confidence=0.95):
+        """Make the model sure that whatever is said means this kind of request."""
+        wanted = L.NLU.FAMILIES[family]
+        patcher = mock.patch.object(L.NLU, "interpret", return_value=L.NLU.Guess(family, wanted.command, confidence, wanted.ask))
+        self.interpret = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_loosely_worded_command_runs_as_the_plain_command_it_means(self):
+        self.model_says("time")
+        self.assertRegex(self.no_tool("got the time"), r"^It's \d{1,2}:\d{2} [AP]M\.$")
+        self.interpret.assert_called_once_with("got the time")                  # it is given the sentence as the patterns saw it
+
+    def test_the_model_sees_the_sentence_tidied_like_the_patterns_see_it(self):
+        self.model_says("time")
+        self.no_tool("Jarvis, could you please give me the clock reading?")
+        self.interpret.assert_called_once_with("give me the clock reading")
+
+    def test_what_a_pattern_understands_never_reaches_the_model(self):
+        self.model_says("time")
+        self.routes("tell me a joke", "get_joke")
+        self.interpret.assert_not_called()
+
+    def test_when_the_model_is_not_sure_the_sentence_is_left_for_the_chat_brain(self):
+        patcher = mock.patch.object(L.NLU, "interpret", return_value=None)
+        interpret = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.assertIsNone(L.LocalReply("do you like cricket"))
+        interpret.assert_called_once_with("do you like cricket")
+
+    def test_without_a_trained_model_nothing_changes(self):
+        self.assertIsNone(L.LocalReply("got the time"))
+        self.assertIsNone(L.LocalReply("why is the sky blue"))
+
+    def test_a_cut_off_sentence_never_gets_as_far_as_the_model(self):
+        self.model_says("time")
+        self.assertIsNone(L.LocalReply("can you"))
+        self.interpret.assert_not_called()
+
+    def test_the_weather_keeps_the_place_that_was_said(self):
+        self.model_says("weather")
+        self.routes("do i need an umbrella in lahore today", "weather_report", "lahore")
+
+    def test_the_weather_without_a_place_is_for_the_home_city(self):
+        self.model_says("weather")
+        self.routes("do i need an umbrella", "weather_report", "Peshawar")
+
+    def test_the_to_do_list_keeps_the_day_that_was_said(self):
+        self.model_says("list_tasks")
+        self.routes("do i have anything for tomorrow", "list_tasks", L._day_from_word("tomorrow"))
+        self.routes("is there anything left on friday", "list_tasks", L._day_from_word("friday"))
+        self.routes("is there anything left", "list_tasks")
+
+    def test_the_command_is_printed_so_you_can_see_what_the_model_understood(self):
+        self.model_says("joke", confidence=0.91)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            L.LocalReply("make me chuckle")
+        self.assertIn("'make me chuckle' as 'tell me a joke', 91% sure", out.getvalue())
+
+    def test_a_guess_that_needs_a_question_asks_it_and_stops_on_no(self):
+        self.model_says("lock_screen")
+        for answer in ("no", "", "maybe"):
+            self.assertEqual(self.no_tool("secure the workstation", answers=[answer]), "Okay sir, I won't.")
+        self.assertEqual(self.questions, ["Did you want me to lock the screen? Say yes or no."])
+
+    def test_a_guess_that_needs_a_question_goes_ahead_on_yes(self):
+        self.model_says("lock_screen")
+        self.routes("secure the workstation", "windows_action", "lock_screen", answers=["yes please"])
+
+    def test_forgetting_what_was_remembered_asks_before_it_does_anything(self):
+        self.model_says("forget_facts")
+        with mock.patch.object(L.ChatBrain, "forget_facts", return_value=3) as forget:
+            self.assertEqual(self.no_tool("wipe my memory banks", answers=["no"]), "Okay sir, I won't.")
+            forget.assert_not_called()
+            self.assertIn("forgotten 3 things", self.no_tool("wipe my memory banks", answers=["yes"]))
+
+    def test_shutting_down_from_a_guess_still_asks_are_you_sure(self):
+        self.model_says("shutdown")
+        reply = self.no_tool("time to call it a night for the machine", answers=["no"])
+        self.assertEqual(self.questions, ["Are you sure you want me to shut down the computer? Say yes or no."])
+        self.assertIn("won't shut down", reply)
+
+    def test_a_rewrite_that_no_pattern_understands_is_not_rewritten_again(self):
+        patcher = mock.patch.object(L.NLU, "interpret", return_value=L.NLU.Guess("time", "gibberish nobody handles", 0.99, ""))
+        interpret = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.assertIsNone(L.LocalReply("something odd"))
+        interpret.assert_called_once()
+
+    def test_split_commands_only_joins_what_the_patterns_understand(self):
+        self.model_says("time")
+        self.assertEqual(L.split_commands("got the time then what is the date"), ["got the time then what is the date"])
 
 
 class HelperTests(unittest.TestCase):

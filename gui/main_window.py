@@ -9,7 +9,7 @@ import sys
 import webbrowser
 
 from PyQt5.QtCore import QDateTime, Qt, QTimer
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QTextCursor
 from PyQt5.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
                              QPlainTextEdit, QPushButton, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget)
 
@@ -192,8 +192,11 @@ class MainWindow(QMainWindow):
         self.hands_free_button = QPushButton("HANDS-FREE")
         self.hands_free_button.setCheckable(True)
         self.hands_free_button.setToolTip("Keep listening for commands without clicking")
+        self.new_chat_button = QPushButton("NEW CHAT")
+        self.new_chat_button.setToolTip("Clear this conversation and start afresh (what you asked Jarvis to remember stays)")
         entry.addWidget(self.input, 1)
         entry.addWidget(self.send_button)
+        entry.addWidget(self.new_chat_button)
         entry.addWidget(self.mic_button)
         entry.addWidget(self.hands_free_button)
         chat_layout.addLayout(entry)
@@ -276,6 +279,7 @@ class MainWindow(QMainWindow):
         c = self.controller
         c.state_changed.connect(self._on_state)
         c.said.connect(lambda text: self._add("JARVIS", text, theme.ACCENT))
+        c.said_more.connect(self._add_more)
         c.heard.connect(lambda text: self._add("YOU", text, theme.YOU))
         c.log.connect(self.log_view.appendPlainText)
         c.problem.connect(self._on_problem)
@@ -285,6 +289,7 @@ class MainWindow(QMainWindow):
         self.lock_button.clicked.connect(lambda: c.submit("sleep"))
         self.quit_button.clicked.connect(self.close)
         self.send_button.clicked.connect(self.send)
+        self.new_chat_button.clicked.connect(self.new_chat)
         self.input.returnPressed.connect(self.send)
         self.mic_button.clicked.connect(lambda _checked=False: self.controller.talk())
         self.hands_free_button.toggled.connect(c.set_hands_free)
@@ -314,6 +319,11 @@ class MainWindow(QMainWindow):
         text = self.input.text()
         if self.controller.submit(text):
             self.input.clear()
+
+    def new_chat(self):
+        """Clear the conversation on screen and have Jarvis forget it too."""
+        if self.controller.reset_chat():
+            self.chat.clear()
 
     def _open_utility(self, key):
         from gui.utils import launcher
@@ -349,6 +359,14 @@ class MainWindow(QMainWindow):
         bar = self.chat.verticalScrollBar()
         bar.setValue(bar.maximum())
 
+    def _add_more(self, text):
+        """The next sentence of the reply Jarvis is still giving: it joins the end of his last message."""
+        cursor = self.chat.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertText(" " + text)
+        bar = self.chat.verticalScrollBar()
+        bar.setValue(bar.maximum())
+
     def _add_note(self, text):
         self.chat.append(f'<div style="margin: 10px 0; color:{theme.MUTED}; text-align:center;">&mdash; {html.escape(text)} &mdash;</div>')
 
@@ -356,7 +374,7 @@ class MainWindow(QMainWindow):
         label, colour = theme.STATES[state]
         self.pill.setText(f'<span style="color:{colour};">●</span>&nbsp;{label}')
         active = state != "locked"
-        for widget in (self.input, self.send_button, self.mic_button, self.hands_free_button, self.lock_button):
+        for widget in (self.input, self.send_button, self.new_chat_button, self.mic_button, self.hands_free_button, self.lock_button):
             widget.setEnabled(active)
         self.start_button.setEnabled(not active)
         self.start_button.setText("START" if not active else "RUNNING")

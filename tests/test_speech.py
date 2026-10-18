@@ -174,6 +174,130 @@ class SpeakTests(unittest.TestCase):
         self.assertIn("?", shown)
 
 
+class SpeakStreamTests(unittest.TestCase):
+    """A reply that is still being written is spoken sentence by sentence, starting with the first."""
+
+    def setUp(self):
+        speech._local = threading.local()
+        speech._listeners.clear()
+        speech._streaming.clear()
+        speech._reported.clear()
+        FakeVoice.created = 0
+        self.addCleanup(speech._listeners.clear)
+        self.addCleanup(speech._streaming.clear)
+
+    def stream(self, sentences, voice_class=FakeVoice, enabled=True, **options):
+        out = io.StringIO()
+        with mock.patch.object(speech, "TTS_ENABLED", enabled), mock.patch.object(speech, "_create_voice", voice_class), \
+                redirect_stdout(out):
+            result = speech.SpeakStream(sentences, **options)
+        self.output = out.getvalue()
+        return result
+
+    def spoken(self):
+        return [text for text, _, _ in speech._local.voice.spoken]
+
+    def test_every_sentence_is_spoken_in_order(self):
+        self.assertTrue(self.stream(iter(["First.", "Second one.", "Third."])))
+        self.assertEqual(self.spoken(), ["First.", "Second one.", "Third."])
+        self.assertEqual(FakeVoice.created, 1)                                   # on the calling thread, with one voice
+
+    def test_the_text_is_shown_as_one_reply(self):
+        self.stream(["First.", "Second."])
+        self.assertEqual(self.output.count("A.I :"), 1)
+        self.assertIn("A.I : First.", self.output)
+        self.assertIn("      Second.", self.output)
+
+    def test_an_empty_reply_says_nothing_and_reports_it(self):
+        self.assertFalse(self.stream(iter([])))
+        self.assertFalse(self.stream(["", "   "]))
+        self.assertFalse(hasattr(speech._local, "voice") and speech._local.voice and speech._local.voice.spoken)
+
+    def test_with_the_voice_off_it_is_shown_but_not_spoken(self):
+        self.assertTrue(self.stream(["Quiet."], enabled=False))
+        self.assertIn("Quiet.", self.output)
+        self.assertEqual(FakeVoice.created, 0)
+
+    def test_window_listeners_are_told_which_sentence_starts_the_reply(self):
+        plain, windowed = [], []
+        speech.add_listener(plain.append)
+        speech.add_listener(lambda text, first: windowed.append((text, first)), streaming=True)
+        self.stream(["One.", "Two.", "Three."])
+        self.assertEqual(plain, ["One.", "Two.", "Three."])
+        self.assertEqual(windowed, [("One.", True), ("Two.", False), ("Three.", False)])
+
+    def test_an_ordinary_line_is_always_a_new_message_for_a_window_listener(self):
+        windowed = []
+        speech.add_listener(lambda text, first: windowed.append((text, first)), streaming=True)
+        self.stream(["One.", "Two."])
+        with mock.patch.object(speech, "_create_voice", FakeVoice), mock.patch.object(speech, "TTS_ENABLED", True), \
+                redirect_stdout(io.StringIO()):
+            speech.Speak("A separate line")
+        self.assertEqual(windowed[-1], ("A separate line", True))
+
+    def test_removing_a_window_listener_forgets_that_it_wanted_to_stream(self):
+        def listener(text, first):
+            pass
+
+        speech.add_listener(listener, streaming=True)
+        speech.remove_listener(listener)
+        self.assertNotIn(listener, speech._streaming)
+
+    def test_the_next_sentence_is_produced_while_the_last_is_still_being_spoken(self):
+        events = []
+
+        class SlowVoice(FakeVoice):
+            def Speak(self, text, flags):
+                events.append(("starts speaking", text))
+                time.sleep(0.3)
+                events.append(("finished speaking", text))
+
+        def sentences():
+            yield "First."
+            time.sleep(0.05)
+            events.append(("produced", "Second."))
+            yield "Second."
+
+        self.stream(sentences(), voice_class=SlowVoice)
+        self.assertEqual(events[:3], [("starts speaking", "First."), ("produced", "Second."), ("finished speaking", "First.")])
+
+    def test_trouble_while_writing_the_reply_keeps_what_was_said_and_is_then_raised(self):
+        def sentences():
+            yield "A good start."
+            raise ConnectionError("dropped")
+
+        with self.assertRaises(ConnectionError):
+            self.stream(sentences())
+        self.assertEqual(self.spoken(), ["A good start."])
+
+    def test_a_slow_start_gets_one_polite_word_and_then_the_reply(self):
+        release = threading.Event()
+        self.addCleanup(release.set)
+
+        def sentences():
+            release.wait(5)
+            yield "Worth the wait."
+
+        timer = threading.Timer(0.5, release.set)
+        timer.start()
+        self.addCleanup(timer.cancel)
+        self.assertTrue(self.stream(sentences(), if_slow="One moment, sir.", after=0.1))
+        self.assertEqual(self.spoken(), ["One moment, sir.", "Worth the wait."])
+
+    def test_a_quick_start_gets_no_polite_word(self):
+        self.stream(iter(["Quick."]), if_slow="One moment, sir.", after=2)
+        self.assertEqual(self.spoken(), ["Quick."])
+
+    def test_a_slow_reply_nothing_ever_comes_of_still_ends(self):
+        def sentences():
+            time.sleep(0.3)
+            return
+            yield
+
+        self.assertFalse(self.stream(sentences(), if_slow="One moment, sir.", after=0.05))
+        self.assertEqual(self.spoken(), ["One moment, sir."])
+
+
 class VoiceCheckTests(unittest.TestCase):
     def setUp(self):
         speech._local = threading.local()

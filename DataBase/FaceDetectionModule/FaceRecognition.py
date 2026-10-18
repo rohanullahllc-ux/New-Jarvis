@@ -21,8 +21,10 @@ def FaceRocog(timeout=VERIFY_SECONDS, cancelled=None):
     except ImportError:
         print(": OpenCV isn't installed (pip install opencv-contrib-python), so I can't check your face.")
         return False
-    if not hasattr(cv2, "face"):
-        print(": This OpenCV build lacks the face module (need opencv-contrib-python). Skipping the face check.")
+    if not hasattr(cv2, "CascadeClassifier") or not hasattr(getattr(cv2, "face", None), "LBPHFaceRecognizer_create"):
+        # OpenCV 5.0 removed both the face detector and the face recogniser this check uses (its cv2.face is empty).
+        print(f": This OpenCV ({getattr(cv2, '__version__', '?')}) can't recognise faces: the face check needs OpenCV 4 with its extra "
+              'modules. To fix it:  pip uninstall -y opencv-python opencv-contrib-python   then   pip install "opencv-contrib-python<5"')
         return False
     if not MODEL.exists() or not CASCADE.exists():
         print(": The face model or cascade file is missing, so I can't check your face.")

@@ -13,7 +13,9 @@ from anthropic import beta_tool
 from anthropic.lib.tools import ToolError
 
 from gui.utils import launcher
-from ._common import folder, safe_filename
+from ._common import KNOWN_FOLDERS, folder, known_folder, safe_filename
+
+URI_APPS = {"calendar": "outlookcal:", "windows calendar": "outlookcal:"}      # apps Windows opens by address, not by name
 
 PROTECTED_PROCESSES = {"explorer", "svchost", "csrss", "winlogon", "lsass", "services", "smss", "wininit",
                        "dwm", "system", "python", "pythonw", "py", "conhost", "code"}
@@ -26,6 +28,12 @@ def open_app(name: str) -> str:
     Args:
         name: App name as it appears in the Start menu, e.g. "chrome", "spotify", "calculator".
     """
+    if name.strip().lower() in URI_APPS:
+        try:
+            os.startfile(URI_APPS[name.strip().lower()])
+            return f"Opened {name}"
+        except OSError:
+            pass                                                # not installed: fall through to the Start menu
     if not re.fullmatch(r"[\w .+-]{1,40}", name):
         raise ToolError("App names may only contain letters, numbers, spaces, dots, plus and minus signs.")
     if "." not in name or name.lower().endswith(".exe"):      # never "open" a document by accident
@@ -130,6 +138,24 @@ def take_screenshot(name: str = "") -> str:
     return f"Saved the screenshot as {name}.png"
 
 
+@beta_tool
+def open_screenshots(which: Literal["folder", "latest"] = "folder") -> str:
+    """Open the folder where screenshots are saved, or the newest screenshot picture.
+
+    Args:
+        which: "folder" for the screenshots folder, "latest" for the most recent picture.
+    """
+    target = folder("ScreenShot")
+    if which == "latest":
+        pictures = sorted(target.glob("*.png"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not pictures:
+            raise ToolError("There are no screenshots yet.")
+        os.startfile(pictures[0])
+        return f"Opened {pictures[0].name}"
+    os.startfile(target)
+    return "Opened the screenshots folder"
+
+
 # ---------------------------------------------------------------- power
 
 POWER_VERBS = {"shutdown": "shut down", "restart": "restart", "sleep": "put to sleep", "lock": "lock"}
@@ -174,9 +200,6 @@ def system_power_action(action: Literal["shutdown", "restart", "sleep", "lock", 
 
 # ---------------------------------------------------------------- folders and Jarvis's own windows
 
-KNOWN_FOLDERS = ("desktop", "documents", "downloads", "pictures", "music", "videos")
-
-
 @beta_tool
 def open_folder(location: str) -> str:
     """Open a drive or folder in File Explorer.
@@ -189,7 +212,7 @@ def open_folder(location: str) -> str:
     if drive:
         path = Path(f"{drive.group(1).upper()}:\\")
     elif text.lower() in KNOWN_FOLDERS:
-        path = Path.home() / text.title()
+        path = known_folder(text)
     else:
         path = Path(text).expanduser()
     if not path.is_dir():
@@ -212,5 +235,5 @@ def open_utility_app(name: Literal["calculator", "calendar", "currency_converter
     return f"Opened the {name.replace('_', ' ')}."
 
 
-TOOLS = [open_app, close_app, windows_action, browser_action, take_screenshot, system_power_action, open_folder,
-         open_utility_app]
+TOOLS = [open_app, close_app, windows_action, browser_action, take_screenshot, open_screenshots, system_power_action,
+         open_folder, open_utility_app]

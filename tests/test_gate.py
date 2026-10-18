@@ -210,7 +210,20 @@ class CameraLoop(unittest.TestCase):
         no_face = fake_cv2()
         del no_face.face
         self.assertFalse(self.run_check(no_face))
-        self.assertIn("lacks the face module", self.output.getvalue())
+        self.assertIn("can't recognise faces", self.output.getvalue())
+
+    def test_opencv_5_which_removed_the_face_check_is_explained_with_the_fix(self):
+        """OpenCV 5.0 still has cv2.face but it is empty, and it has no CascadeClassifier: the check used to fail with
+        "module 'cv2.face' has no attribute 'LBPHFaceRecognizer_create'", which meant nothing to anyone."""
+        opencv_5 = fake_cv2()
+        opencv_5.__version__ = "5.0.0"
+        opencv_5.face = types.SimpleNamespace()
+        del opencv_5.CascadeClassifier
+        self.assertFalse(self.run_check(opencv_5))
+        printed = self.output.getvalue()
+        self.assertIn("OpenCV (5.0.0) can't recognise faces", printed)
+        self.assertIn('pip install "opencv-contrib-python<5"', printed)
+        self.assertEqual(FakeCamera.instances, [])                       # it never touched the camera
 
     def test_a_missing_model_is_reported(self):
         with mock.patch.object(self.module, "MODEL", Path("no/such/model.yml")):

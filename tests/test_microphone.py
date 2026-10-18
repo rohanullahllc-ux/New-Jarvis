@@ -202,5 +202,35 @@ class FailoverAndFallback(unittest.TestCase):
             self.assertEqual(microphone.listen(), "Time")
 
 
+class PauseSetting(unittest.TestCase):
+    """A pause to think must not end the sentence: "can you tell me the square root of ... 6000" was cut after "of"."""
+
+    def setUp(self):
+        reset()
+        self.addCleanup(reset)
+
+    def test_the_recogniser_waits_as_long_as_the_setting_says_before_calling_it_the_end(self):
+        class Quiet(DeadBackend):
+            def __enter__(self):
+                return self
+
+        recognizer = mock.Mock()
+        with mock.patch.object(microphone.sr, "Recognizer", return_value=recognizer), \
+                mock.patch.object(microphone, "Microphone", Quiet), mock.patch.object(microphone, "MIC_PAUSE", 2.5), \
+                mock.patch("builtins.print"):
+            self.assertTrue(microphone._ensure_ready())
+        self.assertEqual(recognizer.pause_threshold, 2.5)
+
+    def test_the_default_is_longer_than_the_one_second_that_used_to_cut_sentences_off(self):
+        self.assertGreater(microphone.MIC_PAUSE, 1.0)
+
+    def test_the_setting_reads_fractions_and_ignores_nonsense(self):
+        import config
+        with mock.patch.dict("os.environ", {"JARVIS_TEST_PAUSE": "1.75", "JARVIS_TEST_BAD": "slow"}):
+            self.assertEqual(config.decimal("JARVIS_TEST_PAUSE", 1.3), 1.75)
+            self.assertEqual(config.decimal("JARVIS_TEST_BAD", 1.3), 1.3)
+            self.assertEqual(config.decimal("JARVIS_TEST_MISSING", 1.3), 1.3)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -17,6 +17,11 @@ from PyQt5.QtCore import Qt  # noqa: E402
 import speech  # noqa: E402
 from gui.session import SessionController  # noqa: E402
 from winmm_mic import MicrophoneError  # noqa: E402
+from tests.isolation import no_language_model  # noqa: E402
+
+
+def setUpModule():
+    no_language_model()
 
 
 def echo_session(listen, ask):
@@ -25,6 +30,9 @@ def echo_session(listen, ask):
     try:
         while True:
             command = listen()
+            if command == "stream":
+                speech.SpeakStream(["First sentence.", "Second sentence.", "Third sentence."])
+                continue
             speech.Speak(f"echo {command}")
             if command in ("sleep", "quit"):
                 return command
@@ -37,7 +45,9 @@ class Recorder:
 
     def __init__(self, controller):
         self.states, self.said, self.heard, self.log, self.problems, self.ended, self.hands_free = [], [], [], [], [], [], []
+        self.said_more = []
         for signal, target in ((controller.state_changed, self.states), (controller.said, self.said),
+                               (controller.said_more, self.said_more),
                                (controller.heard, self.heard), (controller.log, self.log),
                                (controller.problem, self.problems), (controller.ended, self.ended),
                                (controller.hands_free_changed, self.hands_free)):
@@ -69,6 +79,36 @@ class ControllerCase(unittest.TestCase):
         controller.stop()
         if controller._thread:
             controller._thread.join(5)
+
+
+class StreamingReplyTests(ControllerCase):
+    def test_a_reply_that_arrives_in_pieces_is_one_message_followed_by_additions(self):
+        controller, seen = self.make()
+        controller.start()
+        wait_for(lambda: controller.state == "ready")
+        controller.submit("stream")
+        self.assertTrue(wait_for(lambda: len(seen.said_more) == 2))
+        self.assertEqual(seen.said, ["First sentence."])
+        self.assertEqual(seen.said_more, ["Second sentence.", "Third sentence."])
+
+    def test_an_ordinary_line_afterwards_is_a_new_message_again(self):
+        controller, seen = self.make()
+        controller.start()
+        wait_for(lambda: controller.state == "ready")
+        controller.submit("stream")
+        controller.submit("hello")
+        self.assertTrue(wait_for(lambda: "echo hello" in seen.said))
+        self.assertEqual(seen.said, ["First sentence.", "echo hello"])
+        self.assertEqual(len(seen.said_more), 2)
+
+    def test_the_window_can_ask_for_a_fresh_conversation(self):
+        controller, seen = self.make()
+        self.assertFalse(controller.reset_chat())                          # nothing is running yet
+        controller.start()
+        wait_for(lambda: controller.state == "ready")
+        self.assertTrue(controller.reset_chat())
+        self.assertTrue(wait_for(lambda: "echo new chat" in seen.said))
+        self.assertEqual(seen.heard, [])                                   # it is not shown as something the user typed
 
 
 class SessionLifecycleTests(ControllerCase):

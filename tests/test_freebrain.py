@@ -14,6 +14,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import MainCode  # noqa: E402
 from JarvisAdvancedBot import FreeBrain as F  # noqa: E402
 from JarvisAdvancedBot import LocalBrain as L  # noqa: E402
+from tests.isolation import no_language_model  # noqa: E402
+
+
+def setUpModule():
+    no_language_model()
 
 
 class Reply:
@@ -45,6 +50,11 @@ class BrainCase(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def use_ollama(self):
+        patcher = mock.patch.object(F.config, "LLM_PROVIDER", "ollama")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
 
 class ProviderChoiceTests(BrainCase):
     def test_the_service_is_recognised_from_the_key(self):
@@ -55,11 +65,16 @@ class ProviderChoiceTests(BrainCase):
             self.assertEqual(found[0], name)
             self.assertIn(host, found[1])
 
-    def test_without_a_key_only_ollama_is_considered_and_only_if_it_is_running(self):
-        self.assertEqual(F._provider()[0], "ollama")
-        self.assertFalse(F.available())                                   # requests.get fails: Ollama isn't running
-        with mock.patch("requests.get", return_value=Reply({"models": []})):
-            self.assertTrue(F.available())
+    def test_without_a_key_nothing_is_chosen_because_the_local_model_belongs_to_the_chat_brain(self):
+        self.assertIsNone(F._provider())
+        self.assertFalse(F.available())
+
+    def test_ollama_can_still_be_asked_for_explicitly(self):
+        with mock.patch.object(F.config, "LLM_PROVIDER", "ollama"):
+            self.assertEqual(F._provider()[0], "ollama")
+            self.assertFalse(F.available())                               # requests.get fails: Ollama isn't running
+            with mock.patch("requests.get", return_value=Reply({"models": []})):
+                self.assertTrue(F.available())
 
     def test_a_key_makes_it_available_without_asking_the_network(self):
         self.with_key("gsk_abc")
@@ -74,6 +89,13 @@ class ProviderChoiceTests(BrainCase):
     def test_an_unknown_provider_name_is_not_available(self):
         with mock.patch.object(F.config, "LLM_PROVIDER", "nonsense"):
             self.assertFalse(F.available())
+
+
+class PromptTests(BrainCase):
+    def test_the_prompt_can_leave_out_the_clock_so_a_local_model_can_reuse_what_it_read(self):
+        self.assertRegex(F.system_prompt(), r"\d\d:\d\d")
+        self.assertNotRegex(F.system_prompt(with_time=False), r"\d\d:\d\d")
+        self.assertIn("Mr Khan", F.system_prompt(with_time=False))
 
 
 class AskModelTests(BrainCase):
@@ -121,10 +143,11 @@ class AskModelTests(BrainCase):
             self.assertIn(words, out[0])
 
     def test_ollama_needs_no_key_and_a_missing_model_is_explained(self):
+        self.use_ollama()
         with mock.patch("requests.get", return_value=Reply({"models": []})), mock.patch("requests.post", return_value=chat("Hi.")) as post:
             self.assertEqual(F.ask_model("hello"), "Hi.")
         self.assertEqual(post.call_args[1]["headers"], {})
-        self.assertIn("localhost:11434", post.call_args[0][0])
+        self.assertIn("127.0.0.1:11434", post.call_args[0][0])
         out = []
         with mock.patch("requests.get", return_value=Reply({})), mock.patch("requests.post", return_value=Reply(status=404)), \
                 mock.patch("builtins.print", side_effect=lambda *a: out.append(a[0])):
@@ -175,6 +198,7 @@ class LocalBrainIntegrationTests(BrainCase):
         self.assertIn("Did you mean", reply)
         self.assertIn("open calculator", reply)
         self.assertIn("LLM API KEY", reply)
+        self.assertIn("Ollama", reply)
         self.assertNotIn("don't know how to do that yet", reply)
 
     def test_no_setup_hint_when_an_ai_is_already_configured(self):

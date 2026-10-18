@@ -236,8 +236,8 @@ def get_iss_location() -> str:
     iss = get_json("https://api.wheretheiss.at/v1/satellites/25544")
     lat, lon = iss["latitude"], iss["longitude"]
     try:
-        place = get_json("https://nominatim.openstreetmap.org/reverse", lat=f"{lat:.4f}", lon=f"{lon:.4f}",
-                         format="json", zoom=3, **{"accept-language": "en"})
+        place = get_json("https://nominatim.openstreetmap.org/reverse", timeout=4, lat=f"{lat:.4f}", lon=f"{lon:.4f}",
+                         format="json", zoom=3, **{"accept-language": "en"})        # (a slow map service must not hold the answer up)
         over = f"over {place['display_name']}" if place.get("display_name") else f"over open water, at {_coordinates(lat, lon)}"
     except ToolError:
         over = f"at {_coordinates(lat, lon)}"
@@ -252,7 +252,7 @@ def get_iss_location() -> str:
 @beta_tool
 def spacex_company_info() -> str:
     """Give facts about SpaceX: when it was founded, who leads it, and how many launches and booster landings it has made."""
-    agency = get_json(f"{LL2}/agencies/121/", cache_seconds=3600)
+    agency = get_json(f"{LL2}/agencies/121/", timeout=30, cache_seconds=3600)
     leader = (agency.get("administrator") or "").split(":")[-1].strip()
     return (f"SpaceX was founded in {agency.get('founding_year')}" + (f" and is led by {leader}" if leader else "") +
             f". It has made {agency.get('total_launch_count')} launches, {agency.get('successful_launches')} successful "
@@ -267,7 +267,7 @@ def spacex_latest_launch(which: Literal["latest", "next"] = "latest") -> str:
         which: latest for the most recent launch, next for the upcoming one.
     """
     path = "launch/previous/" if which == "latest" else "launch/upcoming/"
-    results = get_json(f"{LL2}/{path}", cache_seconds=600, lsp__name="SpaceX", limit=1, mode="normal").get("results")
+    results = get_json(f"{LL2}/{path}", timeout=30, cache_seconds=600, lsp__name="SpaceX", limit=1, mode="normal").get("results")
     if not results:
         raise ToolError("Launch Library has no SpaceX launch to report.")
     launch = results[0]

@@ -5,6 +5,7 @@ speech and the session itself are replaced with scripted stand-ins.
 """
 import io
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -17,6 +18,18 @@ import config  # noqa: E402
 import gate  # noqa: E402
 import MainCode  # noqa: E402
 import Startup  # noqa: E402
+import transcript  # noqa: E402
+from tests.isolation import no_language_model  # noqa: E402
+
+
+def setUpModule():
+    """Commands are written to the conversation record; in these tests that is a temporary folder, never the real Logs folder."""
+    no_language_model()
+    folder = tempfile.TemporaryDirectory()
+    unittest.addModuleCleanup(folder.cleanup)
+    patcher = mock.patch.object(transcript, "LOG_DIR", Path(folder.name))
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
 
 
 def scripted(*items):
@@ -134,8 +147,11 @@ class CommandDispatcher(unittest.TestCase):
     def handle(self, text):
         spoken = []
         with mock.patch("JarvisAdvancedBot.JarvisAiBrain.ai_available", return_value=False), \
+                mock.patch("JarvisAdvancedBot.ChatBrain.available", return_value=False), \
                 mock.patch.object(MainCode, "Speak", spoken.append), \
+                mock.patch.object(MainCode, "SpeakStream", side_effect=AssertionError("tests must not speak or chat for real")), \
                 mock.patch("JarvisAdvancedBot.tools.media_control") as media, \
+                mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value=None), \
                 mock.patch("builtins.print"):
             outcome = MainCode.handle_command(text, ask=lambda question: "")
         return outcome, spoken, media

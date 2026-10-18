@@ -1,8 +1,10 @@
 """Web and media tools: open sites, search, play YouTube, press media keys."""
+import re
 import time
 from typing import Literal
 from urllib.parse import quote_plus
 
+import requests
 from anthropic import beta_tool
 from anthropic.lib.tools import ToolError
 
@@ -35,6 +37,19 @@ def search_google(query: str) -> str:
     return f"Opened Google results for {query}"
 
 
+def _first_video(query):
+    """The address of the first video YouTube finds for ``query``, or "" when it can't be found.
+
+    YouTube's search page carries its results as data inside the page, so the first video id can be read from it."""
+    try:
+        page = requests.get("https://www.youtube.com/results", params={"search_query": query}, timeout=8,
+                            headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "en"}).text
+    except requests.RequestException:
+        return ""
+    found = re.search(r'"videoRenderer":\{"videoId":"([\w-]{11})"', page)
+    return f"https://www.youtube.com/watch?v={found.group(1)}" if found else ""
+
+
 @beta_tool
 def youtube(query: str, play: bool = True) -> str:
     """Play a video or song on YouTube, or show YouTube search results.
@@ -43,13 +58,10 @@ def youtube(query: str, play: bool = True) -> str:
         query: Video, song or topic.
         play: True to start playing the best match, False to just show search results.
     """
-    if play:
-        try:
-            import pywhatkit              # imported late: it checks the internet the moment it is imported
-            pywhatkit.playonyt(query)
-            return f"Playing {query} on YouTube"
-        except Exception:
-            pass                          # fall back to the results page
+    video = _first_video(query) if play else ""
+    if video:
+        open_url(video)
+        return f"Playing {query} on YouTube"
     open_url("https://www.youtube.com/results?search_query=" + quote_plus(query))
     return f"Opened YouTube results for {query}"
 

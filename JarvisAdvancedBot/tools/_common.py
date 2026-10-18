@@ -7,7 +7,9 @@ import ctypes
 import html
 import re
 import time
+import uuid
 import webbrowser
+from pathlib import Path
 from urllib.parse import urlparse
 
 import requests
@@ -101,6 +103,41 @@ def get_bytes(url, headers=None, timeout=HTTP_TIMEOUT, **params):
 def open_url(url):
     """Open a web page in the default browser (one place, so tests can intercept it)."""
     webbrowser.open(url)
+
+
+KNOWN_FOLDERS = {                 # the ids Windows gives its own folders
+    "desktop": "B4BFCC3A-DB2C-424C-B029-7FE99A87C641", "documents": "FDD39AD0-238F-46AF-ADB4-6C85480369C7",
+    "downloads": "374DE290-123F-4565-9164-39C4925E467B", "pictures": "33E28130-4E1E-4676-835A-98395C3BC3BB",
+    "music": "4BD8D571-6D19-48D3-BE97-422220080E43", "videos": "18989B1D-99B5-455B-841C-AB7C74E4DDFC",
+}
+
+
+class _Guid(ctypes.Structure):
+    _fields_ = [("Data1", ctypes.c_uint32), ("Data2", ctypes.c_uint16), ("Data3", ctypes.c_uint16), ("Data4", ctypes.c_ubyte * 8)]
+
+
+def known_folder(name):
+    """Where Windows keeps Desktop, Documents, Downloads, Pictures, Music or Videos for this user.
+
+    It is not always C:\\Users\\<name>\\Desktop: OneDrive often moves these folders, and only Windows knows where to.
+    Falls back to the folder in the home directory when Windows cannot say."""
+    name = name.strip().lower()
+    guid = uuid.UUID(KNOWN_FOLDERS[name])
+    try:
+        shell32, ole32 = ctypes.windll.shell32, ctypes.windll.ole32
+        shell32.SHGetKnownFolderPath.argtypes = [ctypes.POINTER(_Guid), ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+        shell32.SHGetKnownFolderPath.restype = ctypes.c_long
+        ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+        address = ctypes.c_void_p()
+        wanted = _Guid(guid.time_low, guid.time_mid, guid.time_hi_version, (ctypes.c_ubyte * 8)(*guid.bytes[8:]))
+        if shell32.SHGetKnownFolderPath(ctypes.byref(wanted), 0, None, ctypes.byref(address)) == 0:
+            try:
+                return Path(ctypes.wstring_at(address.value))
+            finally:
+                ole32.CoTaskMemFree(address)
+    except (AttributeError, OSError):
+        pass
+    return Path.home() / name.title()
 
 
 def safe_filename(name):

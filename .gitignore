@@ -21,10 +21,16 @@ DataBase/ScreenShot/
 DataBase/Downloads/
 DataBase/Books/
 DataBase/Cache/
+DataBase/memory.json
 DataBase/TimeTable/timetable.json
 # Face samples + the trained model are biometric data
 DataBase/FaceDetectionModule/samples/
 DataBase/FaceDetectionModule/trainer/
+
+# ---- Models trained on this PC, and what they were measured on (your own sentences are in these)
+models/
+training/nlu_real.txt
+training/reports/
 
 # ---- Large personal media (moved out of the project during the rebuild) ---
 DataBase/Videos/

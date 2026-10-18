@@ -50,6 +50,9 @@ def echo_session(listen, ask):
             if command == "ask me":
                 speech.Speak(f"you said {ask('Which one?')}")
                 continue
+            if command == "stream":
+                speech.SpeakStream(["First part.", "Second part."])
+                continue
             speech.Speak(f"echo {command}")
             if command in ("sleep", "quit"):
                 return command
@@ -394,7 +397,7 @@ class WindowTests(WindowCase):
         self.assertIn("LOCKED", self.window.pill.text())
         self.assertTrue(self.window.start_button.isEnabled())
         for widget in (self.window.input, self.window.send_button, self.window.mic_button, self.window.lock_button,
-                       self.window.hands_free_button):
+                       self.window.hands_free_button, self.window.new_chat_button):
             self.assertFalse(widget.isEnabled())
         self.assertEqual(self.window.pages.currentIndex(), 0)
 
@@ -447,6 +450,28 @@ class WindowTests(WindowCase):
         self.assertTrue(wait_for(lambda: "echo hello there" in self.chat()))
         self.assertIn("YOU", self.chat())
         self.assertEqual(self.window.input.text(), "")
+
+    def test_a_reply_that_arrives_in_pieces_is_shown_as_one_message(self):
+        self.unlock()
+        self.window.input.setText("stream")
+        self.window.send_button.click()
+        self.assertTrue(wait_for(lambda: "First part. Second part." in self.chat()))
+        self.assertEqual(self.chat().count("JARVIS"), 1)
+
+    def test_new_chat_clears_the_conversation_and_tells_the_session(self):
+        self.unlock()
+        self.assertTrue(self.window.new_chat_button.isEnabled())
+        self.window.input.setText("first topic")
+        self.window.send_button.click()
+        self.assertTrue(wait_for(lambda: "echo first topic" in self.chat()))
+        self.window.new_chat_button.click()
+        self.assertTrue(wait_for(lambda: "echo new chat" in self.chat()))
+        self.assertNotIn("first topic", self.chat())
+
+    def test_new_chat_does_nothing_while_locked(self):
+        self.window.new_chat_button.click()                                # disabled, so this click is ignored
+        self.assertFalse(self.controller.running)
+        self.assertEqual(self.chat(), "")
 
     def test_follow_up_questions_appear_and_the_next_message_answers_them(self):
         self.unlock()

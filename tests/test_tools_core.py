@@ -6,6 +6,7 @@ import datetime
 import json
 import logging
 import sys
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -113,6 +114,11 @@ class RegistryTests(unittest.TestCase):
 
 
 class InfoTests(ToolCase):
+    def setUp(self):
+        super().setUp()
+        info._home_country.cache_clear()                    # (the user's home country is remembered between lookups)
+        self.addCleanup(info._home_country.cache_clear)
+
     def test_weather_is_a_sentence_ready_to_speak(self):
         self.http.on("geocoding-api.open-meteo.com", FakeResponse(
             {"results": [{"name": "Peshawar", "country": "Pakistan", "latitude": 34.0, "longitude": 71.5}]}))
@@ -127,6 +133,85 @@ class InfoTests(ToolCase):
     def test_unknown_city_is_reported(self):
         self.http.on("geocoding-api.open-meteo.com", FakeResponse({}))
         self.fails(lambda: T.get_weather(city="Nowhereville"), "Nowhereville")
+
+    # ---- finding a place from what was said. The real geocoder only knows whole names, so the fake does too.
+
+    def geocoder(self, **places_by_name):
+        def answer(url, params):
+            found = places_by_name.get(params["name"].lower())
+            return FakeResponse({"results": found} if found else {})
+        self.http.on("geocoding-api.open-meteo.com", answer)
+
+    @staticmethod
+    def place(name, country, code, admin1=""):
+        return {"name": name, "country": country, "country_code": code, "admin1": admin1, "latitude": 1.0, "longitude": 2.0}
+
+    def test_a_country_after_the_place_chooses_between_places_of_the_same_name(self):
+        other, pakistan = self.place("Murree", "Nowhere", "NW"), self.place("Murree", "Pakistan", "PK", "Punjab")
+        self.geocoder(murree=[other, pakistan])
+        self.assertEqual(info.find_place("Murree in Pakistan")["country_code"], "PK")
+        self.assertEqual(info.find_place("Murree, Pakistan")["country_code"], "PK")
+        self.assertEqual(info.find_place("murree in PK")["country_code"], "PK")
+        self.assertEqual(info.find_place("Murree")["country_code"], "NW")               # no country said: the geocoder's first choice
+
+    def test_common_country_abbreviations_are_understood(self):
+        self.geocoder(springfield=[self.place("Springfield", "United Kingdom", "GB"), self.place("Springfield", "United States", "US")])
+        self.assertEqual(info.find_place("Springfield in the usa" .replace("the ", ""))["country_code"], "US")
+        self.assertEqual(info.find_place("springfield, uk")["country_code"], "GB")
+
+    def test_a_name_the_geocoder_only_half_knows_is_found_by_its_words_longest_first(self):
+        kaghan = self.place("Kaghan", "Pakistan", "PK", "Khyber Pakhtunkhwa")
+        self.geocoder(kaghan=[kaghan], narran=[self.place("Narran", "Australia", "AU")])
+        self.assertEqual(info.find_place("narran kaghan")["name"], "Kaghan")              # (the words "narran" and "kaghan")
+        self.assertEqual(info.find_place("narran kaghan in pakistan")["name"], "Kaghan")
+
+    def test_with_no_country_said_a_place_in_the_users_own_country_wins(self):
+        india, pakistan = self.place("Murree", "India", "IN"), self.place("Murree", "Pakistan", "PK")
+        self.geocoder(peshawar=[self.place("Peshawar", "Pakistan", "PK")], murree=[india, pakistan])
+        self.assertEqual(info.find_place("Murree")["country_code"], "PK")                  # (Peshawar is the default city)
+
+    def test_if_the_home_city_cannot_be_found_the_geocoders_first_choice_is_used(self):
+        self.geocoder(murree=[self.place("Murree", "India", "IN"), self.place("Murree", "Pakistan", "PK")])
+        self.assertEqual(info.find_place("Murree")["country_code"], "IN")
+
+    def test_a_half_known_name_prefers_the_word_that_is_in_the_users_country(self):
+        """"narayan kagan" is Kagan in Pakistan for someone in Peshawar, not Narayan in India."""
+        self.geocoder(peshawar=[self.place("Peshawar", "Pakistan", "PK")],
+                      narayan=[self.place("Narayan", "India", "IN")],
+                      kagan=[self.place("Kagan", "Turkey", "TR"), self.place("Kagan", "Pakistan", "PK", "Khyber Pakhtunkhwa")])
+        found = info.find_place("narayan kagan")
+        self.assertEqual((found["name"], found["country_code"]), ("Kagan", "PK"))
+
+    def test_a_half_known_name_with_nothing_at_home_uses_the_first_word_that_finds_anything(self):
+        self.geocoder(peshawar=[self.place("Peshawar", "Pakistan", "PK")], narayan=[self.place("Narayan", "India", "IN")])
+        self.assertEqual(info.find_place("narayan kagan")["name"], "Narayan")
+
+    def test_a_country_that_matches_nothing_is_an_honest_failure_not_a_place_in_the_wrong_country(self):
+        self.geocoder(narayan=[self.place("Narayan", "India", "IN", "Himachal Pradesh")])
+        self.assertIsNone(info.find_place("narayan khan in pakistan"))                    # India is not what was asked for
+        self.fails(lambda: T.get_weather(city="narayan khan in pakistan"), "couldn't find a place called narayan khan in pakistan")
+
+    def test_looking_for_a_place_never_asks_the_geocoder_more_than_five_times(self):
+        self.geocoder()
+        self.assertIsNone(info.find_place("alpha beta gamma delta epsilon zeta"))
+        self.assertLessEqual(len(self.http.calls), 5)                       # the name, three of its words, and the home city
+
+    def test_weather_for_a_half_known_place_names_the_place_it_used(self):
+        self.geocoder(kaghan=[self.place("Kaghan", "Pakistan", "PK")])
+        self.http.on("api.open-meteo.com/v1/forecast", FakeResponse(
+            {"current": {"temperature_2m": 12.0, "apparent_temperature": 10.0, "relative_humidity_2m": 60,
+                         "wind_speed_10m": 5.0, "weather_code": 3},
+             "daily": {"temperature_2m_max": [15.0], "temperature_2m_min": [4.0], "precipitation_probability_max": [20]}}))
+        self.assertTrue(T.get_weather(city="narran kaghan in pakistan").startswith("Kaghan, Pakistan: overcast"))
+
+    def test_uptime_is_said_the_way_it_is_spoken(self):
+        for seconds, spoken in ((3 * 86400 + 20 * 3600 + 48 * 60 + 58, "3 days and 20 hours"), (86400 + 60, "1 day"),
+                                (5 * 3600 + 12 * 60, "5 hours and 12 minutes"), (3600, "1 hour"), (125, "2 minutes"), (20, "under a minute")):
+            self.assertEqual(info.spoken_duration(seconds), spoken)
+
+    def test_the_pc_status_says_how_long_it_has_been_running_in_words(self):
+        with mock.patch.object(info.psutil, "boot_time", return_value=info.time.time() - (2 * 86400 + 3 * 3600)):
+            self.assertIn("running for 2 days and 3 hours", T.get_system_status())
 
     def test_currency_conversion_speaks_amounts_with_names(self):
         self.http.on("open.er-api.com/v6/latest/USD", FakeResponse({"result": "success", "rates": {"PKR": 277.0}}))
@@ -185,18 +270,20 @@ class WebTests(ToolCase):
     def test_youtube_shows_results_or_plays_the_best_match(self):
         T.youtube(query="lo fi beats", play=False)
         self.assertEqual(self.opened, ["https://www.youtube.com/results?search_query=lo+fi+beats"])
-        played = []
-        with mock.patch.dict(sys.modules, {"pywhatkit": SimpleNamespace(playonyt=played.append)}):
-            self.assertEqual(T.youtube(query="lo fi beats"), "Playing lo fi beats on YouTube")
-        self.assertEqual(played, ["lo fi beats"])
+        self.assertEqual(self.http.calls, [])                               # only looking at results: nothing to look up
+        page = '{"contents":[{"videoRenderer":{"videoId":"kJQP7kiw5Fk","title":"x"}},{"videoRenderer":{"videoId":"TfkP5ubz1z4"}}]}'
+        self.http.on("youtube.com", FakeResponse(None, text=page))
+        del self.opened[:]
+        self.assertEqual(T.youtube(query="lo fi beats"), "Playing lo fi beats on YouTube")
+        self.assertEqual(self.opened, ["https://www.youtube.com/watch?v=kJQP7kiw5Fk"])
+        self.assertEqual(self.http.params_for("youtube.com")["search_query"], "lo fi beats")
 
-    def test_youtube_falls_back_to_results_when_playing_fails(self):
-        def broken(query):
-            raise RuntimeError("no internet")
-
-        with mock.patch.dict(sys.modules, {"pywhatkit": SimpleNamespace(playonyt=broken)}):
-            self.assertIn("results", T.youtube(query="song"))
-        self.assertEqual(self.opened, ["https://www.youtube.com/results?search_query=song"])
+    def test_youtube_falls_back_to_results_when_the_best_match_cannot_be_found(self):
+        self.http.on("youtube.com", requests.ConnectionError("no internet"))
+        self.assertIn("results", T.youtube(query="song"))
+        self.http.routes = [("youtube.com", FakeResponse(None, text="<html>nothing we can read</html>"))]
+        self.assertIn("results", T.youtube(query="song"))
+        self.assertEqual(self.opened, ["https://www.youtube.com/results?search_query=song"] * 2)
 
     def test_media_keys_are_pressed_the_requested_number_of_times(self):
         from pynput.keyboard import Key
@@ -266,6 +353,16 @@ class WindowsTests(ToolCase):
             self.assertEqual(T.open_app(name="notepad"), "Opened notepad")
         startfile.assert_called_once_with("notepad")
 
+    def test_the_windows_calendar_is_opened_by_its_address_since_it_has_no_program_name(self):
+        with mock.patch.object(windows.os, "startfile") as startfile:
+            self.assertEqual(T.open_app(name="calendar"), "Opened calendar")
+        startfile.assert_called_once_with("outlookcal:")
+
+    def test_the_calendar_falls_back_to_the_start_menu_if_its_address_does_not_work(self):
+        with mock.patch.object(windows.os, "startfile", side_effect=OSError), mock.patch("keyboard.send"),                 mock.patch("keyboard.write") as write, mock.patch.object(windows.time, "sleep"):
+            self.assertIn("Start menu", T.open_app(name="calendar"))
+        write.assert_called_once_with("calendar", delay=0.02)
+
     def test_open_app_falls_back_to_the_start_menu_for_store_apps(self):
         with mock.patch.object(windows.os, "startfile", side_effect=OSError), mock.patch("keyboard.send") as send, \
                 mock.patch("keyboard.write") as write, mock.patch.object(windows.time, "sleep"):
@@ -303,11 +400,41 @@ class WindowsTests(ToolCase):
             startfile.assert_called_once_with(str(self.db))
             self.fails(lambda: T.open_folder(location=str(self.db / "nothing here")), "can't find")
 
+    def test_open_folder_asks_windows_where_its_own_folders_are(self):
+        moved = self.db / "OneDrive" / "Desktop"                            # where OneDrive keeps it on many PCs
+        moved.mkdir(parents=True)
+        with mock.patch.object(windows.os, "startfile") as startfile, mock.patch.object(windows, "known_folder", return_value=moved) as where:
+            T.open_folder(location="Desktop")
+        where.assert_called_once_with("Desktop")
+        startfile.assert_called_once_with(str(moved))
+
+    def test_windows_knows_where_every_one_of_its_folders_is(self):
+        for name in _common.KNOWN_FOLDERS:
+            self.assertTrue(_common.known_folder(name).is_absolute(), name)
+        self.assertTrue(_common.known_folder("Desktop").is_dir())
+        self.assertEqual(_common.known_folder(" DOWNLOADS "), _common.known_folder("downloads"))
+
+    def test_when_windows_cannot_say_the_folder_in_the_home_directory_is_used(self):
+        with mock.patch.object(_common.ctypes, "windll", create=True, new=SimpleNamespace()):       # no shell32 at all
+            self.assertEqual(_common.known_folder("music"), Path.home() / "Music")
+
     def test_screenshots_are_saved_under_a_safe_name(self):
         image = mock.Mock()
         with mock.patch("pyautogui.screenshot", return_value=image):
             self.assertEqual(T.take_screenshot(name="my:shot?"), "Saved the screenshot as myshot.png")
         image.save.assert_called_once_with(self.db / "ScreenShot" / "myshot.png")
+
+    def test_screenshots_can_be_opened_as_a_folder_or_as_the_newest_picture(self):
+        self.fails(lambda: T.open_screenshots(which="latest"), "no screenshots")
+        shots = self.db / "ScreenShot"
+        (shots / "old.png").write_bytes(b"1")
+        time.sleep(0.02)
+        (shots / "new.png").write_bytes(b"2")
+        with mock.patch.object(windows.os, "startfile") as startfile:
+            self.assertEqual(T.open_screenshots(which="latest"), "Opened new.png")
+            self.assertEqual(startfile.call_args[0][0], shots / "new.png")
+            self.assertEqual(T.open_screenshots(), "Opened the screenshots folder")
+            self.assertEqual(startfile.call_args[0][0], shots)
 
     def test_utility_windows_open_through_the_shared_launcher(self):
         with mock.patch("subprocess.Popen") as popen:
@@ -327,12 +454,31 @@ class NotesAndTasksTests(ToolCase):
         self.assertEqual(T.take_note(text="milk, eggs", title="Shopping list!"), "Saved note 'Shopping list'")
         self.assertEqual(T.take_note(text="call the bank about the loan on Monday morning"), "Saved your note")
         listing = T.read_notes()
-        self.assertIn("Shopping list", listing)
-        self.assertIn("call the bank about the loan and so on", listing)       # untitled notes are named by what they say
-        self.assertNotIn("note-2026", listing)
+        self.assertEqual(listing, "Your notes: call the bank about the loan on Monday morning; Shopping list: milk, eggs")
+        self.assertNotIn("note-2026", listing)                                  # a short list is read in full, untitled notes as they are
         self.assertIn("milk, eggs", T.read_notes(title="shopping"))
         self.assertIn("Monday morning", T.read_notes(title="bank"))             # found by what it says, not just its title
         self.fails(lambda: T.read_notes(title="holiday"), "No note matching")
+
+    def test_a_long_list_of_notes_is_shortened_to_what_each_starts_with(self):
+        notes = self.db / "Notes"
+        notes.mkdir(parents=True, exist_ok=True)
+        for n in range(4):                                                       # (taken a second apart, as untitled notes are)
+            (notes / f"note-20261018-10000{n}.txt").write_text(f"Sunday\n\nnote number {n} says something rather long indeed", encoding="utf-8")
+        listing = T.read_notes()
+        self.assertTrue(listing.startswith("Recent notes: "))
+        self.assertIn("and so on", listing)
+
+    def test_opening_a_note_opens_the_newest_file_or_the_folder(self):
+        self.fails(lambda: T.open_notes(), "no saved notes")
+        T.take_note(text="older")
+        time.sleep(0.02)
+        T.take_note(text="newer", title="Plan")
+        with mock.patch.object(productivity.os, "startfile", create=True) as start:
+            self.assertEqual(T.open_notes(), "Opened your latest note: newer")
+            self.assertEqual(Path(start.call_args[0][0]).name, "Plan.txt")
+            self.assertEqual(T.open_notes(which="folder"), "Opened the notes folder")
+            self.assertEqual(Path(start.call_args[0][0]).name, "Notes")
 
     def test_tasks_are_numbered_and_removable(self):
         self.assertIn("empty", T.list_tasks())
@@ -463,7 +609,89 @@ class BooksTests(ToolCase):
 
 
 class LanguageAndHelperToolTests(ToolCase):
+    FREE = "translate.googleapis.com"
+
+    def google_free_says(self, *sentences):
+        """What Google's free address answers: a list of [translated, original, ...] pieces, then the language it detected."""
+        self.http.on(self.FREE, FakeResponse([[[done, said, None, None, 1] for done, said in sentences], None, "en"]))
+
+    def test_the_free_google_address_is_asked_first(self):
+        self.google_free_says(("Bonjour", "Hello"))
+        with mock.patch("deep_translator.GoogleTranslator") as page, mock.patch("JarvisAdvancedBot.ChatBrain.complete") as model:
+            self.assertEqual(T.translate_text(text="Hello", target_language="French"), "Bonjour")
+        page.assert_not_called()
+        model.assert_not_called()
+        params = self.http.params_for(self.FREE)
+        self.assertEqual((params["tl"], params["q"], params["sl"]), ("fr", "Hello", "auto"))
+
+    def test_a_reply_in_several_pieces_is_joined_into_one_translation(self):
+        self.google_free_says(("Bonjour. ", "Hello. "), ("Comment allez-vous ?", "How are you?"))
+        self.assertEqual(T.translate_text(text="Hello. How are you?", target_language="fr"), "Bonjour. Comment allez-vous ?")
+
+    def test_when_the_free_address_refuses_the_page_google_is_asked_next(self):
+        self.http.on(self.FREE, FakeResponse(status=429))
+        page = mock.Mock()
+        page.return_value.translate.return_value = "Hola"
+        with mock.patch("deep_translator.GoogleTranslator", page):
+            self.assertEqual(T.translate_text(text="Hello", target_language="es"), "Hola")
+        page.assert_called_once_with(source="auto", target="es")
+
+    def test_when_google_refuses_everywhere_the_model_on_this_pc_translates(self):
+        self.http.on(self.FREE, FakeResponse(status=429))
+        page, memory = mock.Mock(), mock.Mock()
+        page.return_value.translate.side_effect = RuntimeError("TooManyRequests")
+        with mock.patch("deep_translator.GoogleTranslator", page), mock.patch("deep_translator.MyMemoryTranslator", memory), \
+                mock.patch("JarvisAdvancedBot.ChatBrain.complete", return_value="Comment allez-vous ?") as model:
+            self.assertEqual(T.translate_text(text="how are you", target_language="French"), "Comment allez-vous ?")
+        memory.assert_not_called()                                                # the crowd-sourced memory is not even asked
+        system, user = model.call_args[0]
+        self.assertIn("Translate the user's text into French", system)
+        self.assertEqual(user, "how are you")
+
+    def test_the_model_chatting_instead_of_translating_is_not_believed(self):
+        self.http.on(self.FREE, FakeResponse(status=429))
+        page, memory = mock.Mock(), mock.Mock()
+        page.return_value.translate.side_effect = RuntimeError("TooManyRequests")
+        memory.return_value.translate.return_value = "Merci"
+        chatter = "Sure! I would be happy to help you with that translation, here it is with a few notes about the grammar. " * 3
+        with mock.patch("deep_translator.GoogleTranslator", page), mock.patch("deep_translator.MyMemoryTranslator", memory), \
+                mock.patch("JarvisAdvancedBot.ChatBrain.complete", return_value=chatter):
+            self.assertEqual(T.translate_text(text="thanks", target_language="fr"), "Merci")
+
+    def test_quotes_around_the_models_translation_are_removed(self):
+        self.http.on(self.FREE, FakeResponse(status=429))
+        page = mock.Mock()
+        page.return_value.translate.side_effect = RuntimeError("TooManyRequests")
+        with mock.patch("deep_translator.GoogleTranslator", page), mock.patch("JarvisAdvancedBot.ChatBrain.complete", return_value='"Danke"'):
+            self.assertEqual(T.translate_text(text="thanks", target_language="de"), "Danke")
+
+    def test_with_no_model_either_the_crowd_sourced_memory_is_the_last_resort_and_then_an_honest_failure(self):
+        self.http.on(self.FREE, FakeResponse(status=429))
+        page, memory = mock.Mock(), mock.Mock()
+        page.return_value.translate.side_effect = RuntimeError("TooManyRequests")
+        memory.return_value.translate.return_value = "Hola"
+        with mock.patch("deep_translator.GoogleTranslator", page), mock.patch("deep_translator.MyMemoryTranslator", memory), \
+                mock.patch("JarvisAdvancedBot.ChatBrain.complete", return_value=None):
+            self.assertEqual(T.translate_text(text="Hello", target_language="es"), "Hola")
+            memory.return_value.translate.side_effect = RuntimeError("down")
+            self.fails(lambda: T.translate_text(text="Hello", target_language="es"), "aren't answering")
+
+    def test_the_model_is_not_trusted_with_languages_it_gets_wrong(self):
+        self.http.on(self.FREE, FakeResponse(status=429))
+        page, memory = mock.Mock(), mock.Mock()
+        page.return_value.translate.side_effect = RuntimeError("TooManyRequests")
+        memory.return_value.translate.return_value = "صبح بخیر"
+        with mock.patch("deep_translator.GoogleTranslator", page), mock.patch("deep_translator.MyMemoryTranslator", memory),                 mock.patch("JarvisAdvancedBot.ChatBrain.complete", return_value="nonsense") as model:
+            self.assertEqual(T.translate_text(text="good morning", target_language="Urdu"), "صبح بخیر")
+            self.assertEqual(T.translate_text(text="شکریہ", target_language="French"), "صبح بخیر")
+        model.assert_not_called()                                   # not for Urdu, and not for reading Urdu either
+
+    def test_language_names_for_the_model_are_the_ones_people_say(self):
+        self.assertEqual((T.productivity.LANGUAGE_NAMES["ur"], T.productivity.LANGUAGE_NAMES["zh-CN"], T.productivity.LANGUAGE_NAMES["fa"]),
+                         ("Urdu", "Chinese", "Persian"))
+
     def test_translation_uses_google_then_the_backup(self):
+        self.http.on(self.FREE, FakeResponse(status=429))
         google = mock.Mock()
         google.return_value.translate.return_value = "Bonjour"
         with mock.patch("deep_translator.GoogleTranslator", google):
@@ -475,7 +703,8 @@ class LanguageAndHelperToolTests(ToolCase):
         with mock.patch("deep_translator.GoogleTranslator", google), mock.patch("deep_translator.MyMemoryTranslator", backup):
             self.assertEqual(T.translate_text(text="Hello", target_language="es"), "Hola")
         backup.return_value.translate.side_effect = RuntimeError("down")
-        with mock.patch("deep_translator.GoogleTranslator", google), mock.patch("deep_translator.MyMemoryTranslator", backup):
+        with mock.patch("deep_translator.GoogleTranslator", google), mock.patch("deep_translator.MyMemoryTranslator", backup), \
+                mock.patch("JarvisAdvancedBot.ChatBrain.complete", return_value=None):
             self.fails(lambda: T.translate_text(text="Hello", target_language="es"), "aren't answering")
 
     def test_translation_into_an_unknown_language_lists_the_choices(self):
@@ -485,6 +714,12 @@ class LanguageAndHelperToolTests(ToolCase):
         self.assertEqual(T.make_acronym(phrase="portable network graphics"), "PNG (P, N, G) stands for portable network graphics.")
         self.assertTrue(T.make_acronym(phrase="the Bank of England").startswith("BE "))
         self.fails(lambda: T.make_acronym(phrase="   "), "phrase")
+
+    def test_a_folder_in_documents_goes_where_windows_keeps_documents(self):
+        with mock.patch.object(productivity, "known_folder", return_value=self.db) as where:
+            self.assertIn("Created the folder", T.create_folder(name="Projects", location="Documents"))
+        where.assert_called_once_with("Documents")
+        self.assertTrue((self.db / "Projects").is_dir())
 
     def test_folders_are_created_once(self):
         self.assertIn("Created the folder", T.create_folder(name="Projects", location=str(self.db)))

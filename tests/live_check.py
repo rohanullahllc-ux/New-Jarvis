@@ -3,6 +3,7 @@
     python tests/live_check.py              # everything except Starlink (CelesTrak allows one download per 2 hours)
     python tests/live_check.py --all        # including Starlink
     python tests/live_check.py weather nasa # only tools whose name contains one of these words
+    python tests/live_check.py chat         # only the chat model on this PC (needs Ollama running with a model)
 
 Web services come and go, and this project once died of exactly that. Run this when something seems broken:
 a "service said no" line names the service that failed; a "BUG" line is a mistake in Jarvis itself.
@@ -55,12 +56,42 @@ CASES = [
     ("ask_wolfram_alpha", {"question": "distance from Earth to Mars"}),
 ]
 HEAVY = [("spacex_starlink_count", {})]
+CHAT_QUESTIONS = ("What is the capital of Australia?", "and its population?", "Hello, how are you today?")
+
+
+def check_chat(results):
+    """Ask the chat model real questions: a factual one (looked up first), a follow-up, and some small talk."""
+    from JarvisAdvancedBot import ChatBrain
+    if not ChatBrain.available():
+        print("[skipped ] chat: Ollama isn't running or has no model (see the README)")
+        return
+    print(f"chat model: {ChatBrain.choose_model()}")
+    with tempfile.TemporaryDirectory(prefix="jarvis-chat-") as folder, \
+            mock.patch.object(ChatBrain, "FACTS_FILE", Path(folder) / "memory.json"):
+        ChatBrain.forget()
+        for question in CHAT_QUESTIONS:
+            started, first, sentences = time.time(), None, []
+            try:
+                for sentence in ChatBrain.reply_sentences(question):
+                    first = first or time.time() - started
+                    sentences.append(sentence)
+            except Exception as error:                       # noqa: BLE001 - this is the point of the check
+                results["bug"] += 1
+                print(f"[BUG      ] chat: {type(error).__name__}: {error}")
+                continue
+            kind = "ok" if sentences else "service"
+            results[kind] += 1
+            label = "ok       " if sentences else "service said no"
+            said = " ".join(sentences) or "no answer (is the model installed and Ollama running?)"
+            print(f"[{label}] chat: {question!r} (first sentence after {first or time.time() - started:.1f}s)\n            {said[:200]}")
+        ChatBrain.forget()
 
 
 def main(arguments):
     run_all = "--all" in arguments
     words = [argument.lower() for argument in arguments if not argument.startswith("--")]
     cases = CASES + (HEAVY if run_all else [])
+    chat = not words or "chat" in words
     if words:
         cases = [case for case in cases if any(word in case[0] for word in words)]
     results = {"ok": 0, "service": 0, "bug": 0}
@@ -81,6 +112,8 @@ def main(arguments):
             results[kind] += 1
             label = {"ok": "ok       ", "service": "service said no", "bug": "BUG      "}[kind]
             print(f"[{label}] {name} ({time.time() - started:.1f}s)\n            {text[:200]}")
+    if chat:
+        check_chat(results)
     print(f"\n{results['ok']} working, {results['service']} where a service said no, {results['bug']} bugs in Jarvis.")
     if results["service"]:
         print("A 'service said no' line is not always a fault: rate limits (NASA's demo key) and services that are busy pass by themselves.")

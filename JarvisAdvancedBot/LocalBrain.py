@@ -20,8 +20,9 @@ from anthropic.lib.tools import ToolError
 
 import calc
 import config
+import units
 from config import DEFAULT_CITY, HOME_CURRENCY
-from JarvisAdvancedBot import FreeBrain
+from JarvisAdvancedBot import ChatBrain, FreeBrain, NLU
 from JarvisAdvancedBot import tools as T
 from JarvisAdvancedBot.tools._common import read_clipboard
 from JarvisAdvancedBot.tools.productivity import LANGUAGES
@@ -46,7 +47,9 @@ def normalize(text):
     text = text.lower().strip()
     text = re.sub(r"\bjarvis\b[,]?", " ", text)
     text = re.sub(r"[?!.]+$", "", text)
-    text = re.sub(r"^(?:hey|ok|okay)\s+(?=\w)", "", text.strip())
+    text = re.sub(r"^(?:(?:hey|ok|okay)\s+)?assistant\b[,]?\s+(?=\w)", "", text.strip())             # "Jarvis" is often heard as "assistant"
+    text = re.sub(r"^(?:(?:hey|ok|okay|um|uh|er|hmm|sorry|actually|i mean|no i mean|i told you|i said|as i said)[,.]?\s+)+(?=\w)",
+                  "", text.strip())
     text = re.sub(r"^(?:(?:can|could|would|will) you\s+)?(?:please\s+)?", "", text.strip())
     text = re.sub(r"\s+please$", "", text)
     return re.sub(r"\s+", " ", text).strip()
@@ -61,6 +64,12 @@ def _as_typed(fragment):
     """``fragment`` (taken from the lower-cased command) with the capital letters it had originally."""
     found = re.search(re.escape(fragment), original(), flags=re.I) if fragment else None
     return found.group(0) if found else fragment
+
+
+def _show(text):
+    """Show text in the window without speaking it (the voice can't read Urdu, and a whole page is too long to listen to)."""
+    from speech import Show
+    Show(text)
 
 
 def _heads_up(text):
@@ -116,7 +125,8 @@ def how_are_you(m, ask):
     return "All systems running smoothly, sir. How can I help?"
 
 
-@intent(r"^(?:thanks|thank you|great|good job|well done|nice)\b")
+@intent(r"^(?:thanks|thank you|great|good job|well done|nice)\b",
+        r"^(?:perfect|awesome|excellent|cool|brilliant|wonderful|alright|all right|got it|understood|that works)$")
 def thanks(m, ask):
     return random.choice(["You're welcome, sir.", "Always a pleasure, sir.", "Happy to help."])
 
@@ -124,6 +134,11 @@ def thanks(m, ask):
 @intent(r"^(?:who are you|what(?:'s| is) your name|introduce yourself)")
 def who_are_you(m, ask):
     return "I'm Jarvis, your personal assistant, back online and upgraded."
+
+
+@intent(r"^(?:what(?:'s| is) my name|who am i|do you know (?:my name|who i am)|what do you call me)$")
+def my_name(m, ask):
+    return f"You're {config.USER_NAME}, sir."                       # a fact Jarvis already has; a small model gets it wrong
 
 
 @intent(r"\bwhy\b.*(?:\bnot\b|n't|\bnever\b).*\b(?:speak|speaking|talk|talking|say anything)\b",
@@ -138,10 +153,8 @@ def voice_check(m, ask):
 
 @intent(r"^(?:what can you do|help|what are your (?:features|skills|commands))")
 def help_me(m, ask):
-    return ("I can tell you the time, weather, crypto prices and exchange rates, do maths, look things up, translate, "
-            "open apps, folders and websites, play YouTube, control music and volume, keep notes, a to-do list and your "
-            "time table, set reminders, take screenshots, check your PC, show NASA photos, the space station and SpaceX "
-            "launches, tell jokes and facts, send email, and shut the PC down when you confirm.")
+    return ("I can tell you the time and weather, do maths and conversions, keep notes, tasks and reminders, open apps and "
+            "files, check your PC, follow space news, tell jokes, and chat about almost anything. Just ask, sir.")
 
 
 # ---------------------------------------------------------------- time
@@ -149,6 +162,15 @@ def help_me(m, ask):
 @intent(r"\bwhat(?:'?s| is) the time\b", r"\bwhat time is it\b", r"\b(?:tell me the|current) time\b", r"^time$")
 def time_now(m, ask):
     return "It's " + datetime.datetime.now().strftime("%I:%M %p").lstrip("0") + "."
+
+
+@intent(r"^is it (?:a\.?m\.?|p\.?m\.?|morning|afternoon|evening|night|day(?:time)?|noon|midnight)"
+        r"(?: or (?:a\.?m\.?|p\.?m\.?|morning|afternoon|evening|night|day(?:time)?))?$",
+        r"^(?:what )?(?:part of the day|time of (?:the )?day) is it$", r"^(?:a\.?m\.?|p\.?m\.?) (?:or|and|/) (?:a\.?m\.?|p\.?m\.?)$")
+def part_of_the_day(m, ask):
+    now = datetime.datetime.now()
+    period = "morning" if 5 <= now.hour < 12 else "afternoon" if 12 <= now.hour < 17 else "evening" if 17 <= now.hour < 21 else "night"
+    return f"It's {now.strftime('%I:%M %p').lstrip('0')}, so it's {period}, sir."
 
 
 @intent(r"\bwhat(?:'?s| is) (?:the |today'?s )?date\b", r"\bwhat day is (?:it|today)\b", r"\btoday'?s date\b", r"^date$")
@@ -221,16 +243,39 @@ TODO = r"(?:to ?do|to-do|todo|task)s?(?: list)?"
 
 
 @intent(rf"^(?:add|put|write) (?P<task>.+?) (?:to|on|in|into) (?:my |the )?{TODO}$",
-        r"^(?:add|new|create) (?:a )?(?:new )?task(?: to do)?[:,]?\s*(?P<task>.*)$")
+        r"^(?:add|new|create|schedule|make|set up) (?:me )?(?:a |an )?(?:new )?task(?: to do)?[:,]?\s*(?P<task>.*)$")
 def add_task(m, ask):
     task = _as_typed(m["task"].strip()) or ask("What's the task?")
     return T.add_task(task) + "." if task else "Okay, nothing added."
 
 
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def _day_from_word(word):
+    """"today", "tomorrow" or a weekday name (the next one) as YYYY-MM-DD; "" for anything else."""
+    today = datetime.date.today()
+    if word == "today":
+        return today.isoformat()
+    if word == "tomorrow":
+        return (today + datetime.timedelta(days=1)).isoformat()
+    if word in WEEKDAYS:
+        ahead = (WEEKDAYS.index(word) - today.weekday()) % 7 or 7
+        return (today + datetime.timedelta(days=ahead)).isoformat()
+    return ""
+
+
+@intent(r"^schedule (?P<task>.+?)(?: (?:for|by|on|until|before) (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?$")
+def schedule_task(m, ask):
+    return T.add_task(_as_typed(m["task"].strip()), _day_from_word(m["day"] or "")) + "."
+
+
 @intent(rf"\b(?:what(?:'s| is)(?: on)?|show|read|list|tell me|check)\b.*\b{TODO}\b",
-        rf"^(?:my )?{TODO}(?: for today)?$", r"\bwhat do i have to do\b")
+        rf"^(?:my )?{TODO}(?: for (?:today|tomorrow))?$", r"\bwhat do i have to do\b",
+        r"\bwhat\b.*\b(?:tasks?|work)\b.*\b(?:scheduled|planned|due|pending)\b")
 def list_tasks(m, ask):
-    return T.list_tasks()
+    day = re.search(r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", m.string)
+    return T.list_tasks(_day_from_word(day.group(1))) if day else T.list_tasks()
 
 
 @intent(r"\b(?:remove|delete|cross off|tick off|complete|completed|finish|finished|done with|mark)\b"
@@ -272,15 +317,51 @@ def add_to_timetable(m, ask):
     return T.add_timetable_block(start, end, _as_typed(m["activity"]))
 
 
-@intent(r"^(?:what(?:'s| is)|show|check|tell me|read|open|display)\b.*\b(?:time ?table|schedule|routine)\b",
+@intent(r"^(?:what(?:'s| is)(?: on)?|show|check|tell me|read|open|display)(?: me)?(?: (?:on|of))? (?:my |the |today'?s |tomorrow'?s )?"
+        r"(?:time ?table|schedule|routine)(?: for (?:today|tomorrow|the day|now))?$",
         r"^(?:my )?(?:time ?table|schedule|routine)$", r"\bwhat (?:should|do) i (?:be )?(?:doing|do) (?:now|right now|next)\b")
 def timetable(m, ask):
     return T.get_timetable_block()
 
 
+# ---------------------------------------------------------------- what Jarvis remembers about you
+# (facts for the chat brain, kept in DataBase/memory.json; notes are separate: "take a note that ...")
+
+@intent(r"^remember (?:that )?(?!to\b)(?P<fact>.{3,})$")                       # "remember to call Ali" is a reminder, not a fact
+def remember_fact(m, ask):
+    fact, _, after = m["fact"].partition(" then ") if " then " in m["fact"] else (m["fact"], "", "")
+    if re.search(r"\bpass(?:word|code|phrase)s?\b|\bpin\b|\bcvv\b|\bcard number\b", fact):
+        return "I'd rather not keep passwords or card numbers, sir. They would sit in a plain text file."
+    ChatBrain.remember(_as_typed(fact.strip().rstrip(",")))
+    return "Okay sir, I'll remember that." + (" I didn't catch what you said after 'then', sir." if after.strip() else "")
+
+
+@intent(r"^what (?:do you|have i told you to) (?:remember|know)(?: about me)?$", r"^what have i asked you to remember$",
+        r"^(?:list|show|read)(?: me)?(?: all)? (?:my |the )?(?:facts|memories)$")
+def recall_facts(m, ask):
+    known = ChatBrain.facts()
+    if not known:
+        return "You haven't asked me to remember anything yet, sir. Say remember that, and then the fact."
+    latest = known[-6:]
+    more = f", and {len(known) - len(latest)} more" if len(known) > len(latest) else ""
+    return "You asked me to remember: " + "; ".join(latest) + more + "."
+
+
+@intent(r"^(?:forget|clear|delete|erase) (?:all )?(?:my |the )?(?:facts|memories)$",
+        r"^forget everything you (?:know|remember)(?: about me)?$")
+def forget_all_facts(m, ask):
+    count = ChatBrain.forget_facts()
+    return f"Done sir, I've forgotten {count} thing{'' if count == 1 else 's'}." if count else "I wasn't remembering anything, sir."
+
+
+@intent(r"^forget (?:that |what i (?:told|said)(?: you)? about )?(?P<about>.{3,})$")
+def forget_one_fact(m, ask):
+    return "Forgotten, sir." if ChatBrain.forget_facts(m["about"]) else "I don't have anything like that to forget, sir."
+
+
 # ---------------------------------------------------------------- notes, password, jokes, screenshot
 
-NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note|note (?:that|down)|remember that)"
+NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note|note (?:that|down))"
 
 
 @intent(NOTE_START)
@@ -288,6 +369,13 @@ def take_note(m, ask):
     text = re.sub(NOTE_START + r"(?: that| saying| of| about)?[:,]?\s*", "", m.string).strip()
     text = _as_typed(text) or ask("What should the note say?")
     return T.take_note(text) + "." if text else "Okay, no note then."
+
+
+@intent(r"^open (?:the |my |last |latest |recent |saved )*notes?(?: file| folder| app| application)?$")
+def open_the_notes(m, ask):
+    """One note opens in Notepad (and is read out); "the notes", plural, open the folder that holds them all."""
+    plural = re.search(r"\bnotes\b", m.string) and "file" not in m.string
+    return T.open_notes("folder" if plural or "folder" in m.string else "latest") + ", sir."
 
 
 @intent(r"\b(?:read|show|list|open|see|check|view|what are|what is in|what's in|do i have)(?: me)?(?: all)? (?:my |the |any )?(?:last |latest |recent |saved )?notes?\b",
@@ -298,6 +386,16 @@ def read_notes(m, ask):
     title = re.sub(r".*?\bnotes?\b(?: (?:about|called|named|on))?\s*", "", m.string, count=1).strip()
     title = "" if re.fullmatch(r"(?:do i have|i have|do i|i)?(?: any)?", title) else title
     return _sentences(T.read_notes(title), 4)
+
+
+@intent(r"^(?!.*\b(?:generate|create|make|give me|new|random|strong|good|best|safe|secure|suggest|wi-?fi|e-?mail|gmail|facebook|"
+        r"instagram|discord|account|site|website|network|router|bank)\b)"
+        r"(?=.*\bpassword\b)"                                    # (the word "jarvis" is removed before patterns see the sentence)
+        r"(?=.*\b(?:unlock|log ?in|program|current|actual|real|forgot|forgotten|reveal|remind|tell me the|what(?:'s| is) the|"
+        r"what(?:'s| is) my|my)\b).*$")
+def jarvis_password(m, ask):
+    return ("I don't keep your password in a form I can read out, sir, and I wouldn't say it aloud if I could. To choose a new "
+            "one, open a terminal in the Jarvis folder and run: python gate.py --set-password")
 
 
 @intent(r"\b(?:generate|create|make|give me|new|random|strong)\b.*\bpassword\b")
@@ -311,7 +409,16 @@ def joke(m, ask):
     return T.get_joke()
 
 
-@intent(r"\b(?:screenshot|screen shot|capture (?:the |my )?screen)\b")
+@intent(r"^(?:where|which folder|what folder)\b.*\bscreen ?shots?\b",
+        r"^(?:open|show|see|view|display)(?: me)? (?:the |my |last |latest |recent |saved )*screen ?shots?(?: folder| file| picture| image)?$")
+def find_screenshots(m, ask):
+    wants_folder = bool(re.search(r"\bwhere\b|\bfolder\b|screen ?shots\b", m.string))
+    T.open_screenshots("folder" if wants_folder else "latest")
+    return ("Opening the screenshots folder, sir. That is where they are saved." if wants_folder
+            else "Opening your latest screenshot, sir.")
+
+
+@intent(r"^(?!.*\b(?:where|open|show|see|view|saved|folder|find)\b).*\b(?:screenshot|screen shot|capture (?:the |my )?screen)\b")
 def screenshot(m, ask):
     return T.take_screenshot() + "."
 
@@ -352,7 +459,7 @@ def open_a_folder(m, ask):
     return f"Opening {'drive ' + where.upper() if len(where) == 1 else 'your ' + where + ' folder'}, sir."
 
 
-@intent(r"^(?:open|launch|start|run|show|use)(?: me)? (?:the |my |a )?(?:system|windows|default) (?P<name>calculator|calendar)(?: app| application| program)?$")
+@intent(r"^(?:(?:open|launch|start|run|show|use)(?: me)? )?(?:the |my |a )?(?:system|windows|default) (?P<name>calculator|calendar)(?: app| application| program)?$")
 def open_the_windows_one(m, ask):
     T.open_app(m["name"])
     return f"Opening the Windows {m['name']}, sir."
@@ -401,7 +508,8 @@ KEY_COMMANDS = [
         (r"\bnew tab\b", "new_tab"), (r"\b(?:reopen|restore) (?:the )?(?:closed |last )?tab\b", "reopen_closed_tab"),
         (r"\bclose (?:this |the )?tab\b", "close_tab"), (r"\bnext tab\b", "next_tab"),
         (r"\bprevious tab\b", "previous_tab"), (r"\bincognito\b", "incognito_window"),
-        (r"\bnew (?:browser )?window\b", "new_window"), (r"\b(?:browser |browsing )?history\b", "history"),
+        (r"\bnew (?:browser )?window\b", "new_window"),
+        (r"^(?:(?:open|show|see|view|go to|bring up|check)(?: me)? )?(?:my |the )?(?:browser |browsing |chrome )?history(?: page| tab)?$", "history"),
         (r"\b(?:browser|chrome|firefox|edge) downloads\b", "downloads"), (r"\bbookmark\b", "bookmark_page"),
         (r"^(?:refresh|reload)(?: the| this)?(?: page)?$", "refresh"), (r"\bzoom in\b", "zoom_in"),
         (r"\bzoom out\b", "zoom_out"), (r"\breset (?:the )?zoom\b", "reset_zoom"),
@@ -464,14 +572,15 @@ def youtube_play(m, ask):
 MATH_WORDS = [
     (r"(?<=\d),(?=\d{3})", ""), (r"(\d+(?:\.\d+)?)\s*(?:%|percent) of\b", r"(\1/100)*"),
     (r"(\d+(?:\.\d+)?)\s*(?:%|percent)", r"(\1/100)"), (r"\bsquare root of\s*(\d+(?:\.\d+)?)", r"sqrt(\1)"),
+    (r"\bcube root of\s*(\d+(?:\.\d+)?)", r"(\1)**(1/3)"),
     (r"\bmultiplied by\b|\btimes\b|\binto\b|×|\bx\b", "*"), (r"\bdivided by\b|\bover\b|÷", "/"),
     (r"\bplus\b", "+"), (r"\bminus\b", "-"), (r"\bto the power of\b|\bpower\b|\^", "**"),
     (r"\bsquared\b", "**2"), (r"\bcubed\b", "**3"),
 ]
 
 
-@intent(r"^(?:calculate|compute|solve|what(?:'?s| is)|how much is)\s+(?P<expr>(?:square root of |-|\()?\d.*)$",
-        r"^(?:what(?:'?s| is) )?(?:the )?(?P<expr>square root of \d.*)$",
+@intent(r"^(?:calculate|compute|solve|what(?:'?s| is)|how much is)\s+(?P<expr>(?:(?:square|cube) root of |-|\()?\d.*)$",
+        r"^(?:what(?:'?s| is) )?(?:the )?(?P<expr>(?:square|cube) root of \d.*)$",
         r"^(?P<expr>[\d(][\d\s.,+\-*/x×÷()^%]*[\d)%])$")
 def calculate(m, ask):
     expr = m["expr"]
@@ -575,7 +684,7 @@ def asteroids(m, ask):
     return T.nasa_near_earth_objects()
 
 
-@intent(r"\b(?:iss|international space station|space station)\b")
+@intent(r"\b(?:iss|international space station|space station)\b", r"^where(?:'s| is) (?:the )?is$")      # "where is is": how ISS is heard
 def space_station(m, ask):
     return T.get_iss_location()
 
@@ -586,12 +695,12 @@ def starlink(m, ask):
     return T.spacex_starlink_count()
 
 
-@intent(r"\bnext\b.*\blaunch\b", r"\bupcoming\b.*\blaunch\b", r"\bspace ?x\b.*\b(?:next|upcoming)\b")
+@intent(r"\bnext\b.*\blaunch(?:es)?\b", r"\bupcoming\b.*\blaunch(?:es)?\b", r"\bspace ?x\b.*\b(?:next|upcoming)\b")
 def next_launch(m, ask):
     return T.spacex_latest_launch("next")
 
 
-@intent(r"\b(?:latest|last|recent|previous)\b.*\blaunch\b", r"\bspace ?x\b.*\b(?:latest|last|recent)\b")
+@intent(r"\b(?:latest|last|recent|previous)\b.*\blaunch(?:es)?\b", r"\bspace ?x\b.*\b(?:latest|last|recent)\b")
 def last_launch(m, ask):
     return T.spacex_latest_launch("latest")
 
@@ -609,7 +718,11 @@ def _place(text):
     return "" if place in {"today", "tomorrow", "tonight", "now", "right now", "this week", "the week"} else place
 
 
-@intent(r"\b(?:weather|temperature|forecast|how (?:hot|cold|warm) is it|is it (?:going to )?rain)")
+@intent(r"\b(?:weather|forecast|how (?:hot|cold|warm) is it|is it (?:going to )?rain)",
+        # "temperature" is the weather only when it is what is being asked for ("what's the temperature in London"), not when it
+        # is a word in a general question ("at what temperature does water boil")
+        r"^(?:(?:what(?:'s| is)|how(?:'s| is)|tell me|show me|give me|check)(?: me)? )?(?:the |today'?s |current |outside )*temperature"
+        r"(?: (?:like|outside|today|tomorrow|now|right now|here|this week))*(?: (?:in|at|for) .+)?$")
 def weather(m, ask):
     return T.weather_report(_place(m.string) or DEFAULT_CITY)
 
@@ -630,7 +743,9 @@ PC_TOPICS = [
 
 @intent(r"\b(?:battery|cpu|processor|ram|memory usage|disk space|storage|drives|system (?:status|info|information|details)"
         r"|pc status|computer status|uptime|ip address|network status|internet connection|am i connected"
-        r"|windows version|operating system|computer name|specs|specifications)\b")
+        r"|windows version|operating system|computer name|specs|specifications"
+        r"|(?:status|health|state|condition) of (?:my |the )?(?:pc|computer|laptop|system)"
+        r"|how(?:'s| is) (?:my |the )?(?:pc|computer|laptop)(?: doing| running)?)\b")
 def pc_info(m, ask):
     battery = psutil.sensors_battery()
     if "battery" in m.string and battery:
@@ -655,11 +770,12 @@ LANG = "|".join(sorted(LANGUAGES, key=len, reverse=True))
 @intent(rf"^translate (?P<text>.+?) (?:to|into|in) (?P<lang>{LANG})$", rf"^how do you say (?P<text>.+?) in (?P<lang>{LANG})$")
 def translate(m, ask):
     result = T.translate_text(m["text"], m["lang"])
-    print(f": Translation: {result}")
     language = m["lang"].title()
     if all(ord(c) < 0x0370 for c in result):  # Latin script, which the voice can read aloud
         return f"In {language}, that's: {result}"
-    return f"I've written the {language} translation on the screen."
+    _heads_up(f"Here is the {language} translation, sir.")
+    _show(result)                              # in the conversation, not just the log: the voice can't read this script
+    return ""
 
 
 # ---------------------------------------------------------------- books, acronyms, folders, Wolfram Alpha
@@ -670,9 +786,11 @@ def read_book(m, ask):
     found = m.groupdict()
     page = int(found.get("page") or 1)
     text = T.read_book_page((found.get("title") or "").strip(), page)
-    print(f": {text}")
     spoken = _sentences(text, 4)
-    return spoken if spoken == text else spoken + " The rest of the page is on the screen."
+    if spoken == text:
+        return spoken
+    _show(text)                                # the whole page, in the conversation
+    return spoken + " The rest of the page is on the screen."
 
 
 @intent(r"\bacronym\b")
@@ -686,6 +804,24 @@ def acronym(m, ask):
 def new_folder(m, ask):
     name = _as_typed(m["name"].strip()) or ask("What should the folder be called?")
     return T.create_folder(name, m["where"] or "documents") + "." if name else "Okay, no folder then."
+
+
+UNIT = units.pattern()
+AMOUNT = r"(?P<n>\d[\d,]*(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|ninety)"
+
+
+@intent(rf"^(?:convert |what(?:'s| is) |how much is )?{AMOUNT} ?(?P<from>{UNIT}) (?:to|in|into|as|equals?) (?P<to>{UNIT})$",
+        rf"^how many (?P<to>{UNIT}) (?:are |is )?(?:there )?in (?:{AMOUNT} ?)?(?:a |an |one )?(?P<from>{UNIT})$")
+def unit_conversion(m, ask):
+    found = m.groupdict()
+    amount = 1.0
+    if found.get("n"):
+        text = found["n"].replace(",", "")
+        amount = float(text) if re.fullmatch(r"\d+(?:\.\d+)?", text) else float(NUMBER_WORDS.get(text, 1))
+    try:
+        return units.sentence(amount, found["from"], found["to"])
+    except ValueError as problem:
+        return str(problem)
 
 
 @intent(r"^(?:ask )?wolfram(?: alpha)?[,:]? (?P<q>.+)$", r"^convert (?P<q>.+)$")
@@ -852,10 +988,13 @@ def close_something(m, ask):
         r"^what does (?P<q>.+) mean$", r"^(?:who|what) (?:is|are|was|were) (?:a |an |the )?(?P<q>.+)$",
         r"^(?:where|when) (?:is|was|are|were|did) (?P<q>.+)$")
 def knowledge(m, ask):
-    if FreeBrain.available():                           # an AI model explains and discusses far better than a Wikipedia summary
-        reply = FreeBrain.ask_model(original() or m.string)
-        if reply:
-            return reply
+    if not re.match(r"^(?:search )?(?:on )?wikipedia", m.string):       # an explicit "wikipedia ..." still goes to Wikipedia
+        if ChatBrain.available():                       # the chat model explains far better than a Wikipedia summary, and
+            return None                                 # MainCode speaks its answer sentence by sentence as it arrives
+        if FreeBrain.available():
+            reply = FreeBrain.ask_model(original() or m.string)
+            if reply:
+                return reply
     try:
         return _sentences(T.search_wikipedia(m["q"]))
     except ToolError as not_on_wikipedia:
@@ -890,12 +1029,21 @@ EXAMPLES = [
     "how much RAM do I have", "NASA picture of the day", "where is the ISS", "tell me about Jupiter",
     "send an email", "shut down the computer", "generate a password", "show Lahore on the map",
     "business names for coffee shop", "COVID cases in Pakistan", "what can you do",
+    "convert 5 miles to kilometres", "how many feet in a mile",
+    "remember that my sister's birthday is in March", "what do you remember about me", "open the system calendar",
+    "how is my PC doing", "schedule buy bread for tomorrow", "what's on my to do list for tomorrow", "open my latest note",
+    "where are my screenshots saved", "is it AM or PM", "cube root of 27",
 ]
+
+
+OPEN_MEANS_OPEN = {"note", "notes", "my notes", "screenshot"}
 
 
 def _canonical(text):
     """"jarvis calculator" style bare words, with or without open/show/the/app, become a full command."""
     core = _TRAILING.sub("", _LEADING.sub("", text)).strip()
+    if core in OPEN_MEANS_OPEN and re.match(r"(?:open|launch|start|run)\b", text):
+        return text                                # "open the screenshot" is not "take a screenshot", nor "open the note" "show my notes"
     return BARE_WORDS.get(core, text)
 
 
@@ -912,12 +1060,74 @@ def suggest(query, count=3):
     return [example for _, example in sorted(scored, reverse=True)[:count]]
 
 
-def LocalReply(query, ask=lambda question: ""):
-    """Return the reply for a command, or None if it wasn't understood."""
+SESSION_WORDS = re.compile(r"(?:go to |take a |you can )?(?:sleep|rest)(?: mode)?(?: now)?|(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?|"
+                           r"(?:start (?:a )?)?(?:new|fresh) (?:chat|conversation)|start over")           # MainCode handles these itself
+COMMAND_JOINERS = re.compile(r"\s*,?\s*\b(?:and then|and after that|after that|then)\b\s*,?\s*", re.I)
+
+
+def understands(text):
+    """True if one of the command patterns (not the catch-all question one) matches the text. It tells a real "do this, then
+    that" from a sentence that merely has "then" in it."""
+    wording = _canonical(normalize(text))
+    return bool(wording) and not EXPLANATION.match(wording) and (bool(SESSION_WORDS.fullmatch(wording))
+                              or any(pattern.search(wording) for pattern, handler in INTENTS if handler is not knowledge))
+
+
+def split_commands(text):
+    """"schedule buy bread then what's on my list" as two commands, but only when every piece is one Jarvis understands;
+    otherwise the text stays whole (so "tell me what happens then" is still one question)."""
+    pieces = [piece.strip() for piece in COMMAND_JOINERS.split(text) if piece.strip()]
+    return pieces if len(pieces) > 1 and all(understands(piece) for piece in pieces) else [text]
+
+
+# Explaining something is for the chat brain, however many command words are in the question: "what is a screenshot" must not take
+# one, "how does a battery work" is not a battery report, and "what is the difference between a comet and an asteroid" is not an
+# asteroid report.
+EXPLANATION = re.compile(
+    r"^(?:(?:what(?:'s| is| are) )?(?:the )?differences? between\b"
+    r"|explain\b"
+    r"|why (?:do|does|did|is) "
+    r"|why are (?:the|people|some|most|there|all|many) "
+    r"|how (?:do|does) .+ works?$"
+    r"|what (?:is|are) (?:a|an) \w"
+    r"|what (?:do|does) (?:a|an|the) \w+ (?:do|mean)\b"
+    r"|how (?:do|can|should) i (?:take|make|get|install|fix|stop|learn|find|change|reset|update|speed|clear|free|connect|check|add|create|use|set)\b)")
+DAY_WORDS = re.compile(r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b")
+
+
+def _guessed_command(guess, text):
+    """The command to run for the language model's guess, with the detail the model can't carry: the place for the weather,
+    the day for the to do list."""
+    if guess.family == "weather" and _place(text):
+        return f"{guess.command} in {_place(text)}"
+    day = DAY_WORDS.search(text)
+    if guess.family == "list_tasks" and day:
+        return f"{guess.command} for {day.group(1)}"
+    return guess.command
+
+
+def _by_the_language_model(text, ask):
+    """The second chance for a sentence no pattern understood: the model Jarvis trained on this PC (NLU.py) guesses what was
+    meant and, when it is sure, the plain command it stands for is run. Awkward-to-undo commands are checked with you first."""
+    if ChatBrain.is_fragment(ChatBrain.clean_question(text)):       # "can you", "the square root of": cut off, nothing to read
+        return None
+    guess = NLU.interpret(text)
+    if guess is None:
+        return None
+    command = _guessed_command(guess, text)
+    print(f": (language model: understood {text!r} as {command!r}, {guess.confidence:.0%} sure)")
+    if guess.ask and not _confirmed(ask, guess.ask):
+        return "Okay sir, I won't."
+    return LocalReply(command, ask, guessed=True)
+
+
+def LocalReply(query, ask=lambda question: "", guessed=False):
+    """Return the reply for a command, or None if it wasn't understood. ``guessed`` is set when the command is the language
+    model's rewrite of what was said, so a rewrite that no pattern understands cannot be rewritten again."""
     _context.query = query
     text = normalize(query)
-    if not text:
-        return None
+    if not text or EXPLANATION.match(text):
+        return None                                      # (an explanation is for the chat brain, whatever words are in it)
     text = _canonical(text)
     for pattern, handler in INTENTS:
         match = pattern.search(text)
@@ -932,4 +1142,4 @@ def LocalReply(query, ask=lambda question: ""):
             return "Sorry sir, that didn't work. The details are in the window."
         if reply is not None:
             return reply
-    return None
+    return None if guessed else _by_the_language_model(text, ask)

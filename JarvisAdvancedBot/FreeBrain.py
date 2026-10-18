@@ -4,7 +4,8 @@ LocalBrain is a list of command patterns; it cannot chat or explain. This is the
 
 1. A free AI model, if one is set up in .env. Any OpenAI-compatible service works. Groq, Google Gemini and
    OpenRouter all give out free keys without a card (paste it as LLM_API_KEY and Jarvis recognises which
-   service it belongs to), and Ollama runs a small model on this PC with no account at all.
+   service it belongs to). The model that runs on this PC through Ollama is ChatBrain's job, not this module's,
+   unless LLM_PROVIDER=ollama asks for it here.
 2. Otherwise a free web answer (DuckDuckGo's instant answers), which covers facts and definitions.
 
 Both return None when they have nothing, so the caller can fall back to suggestions.
@@ -35,7 +36,7 @@ def _provider():
     """(name, base url, model, key) of the AI service to use, or None."""
     name, key = config.LLM_PROVIDER, config.LLM_API_KEY
     if name in ("", "auto"):
-        name = next((guess for prefix, guess in KEY_PREFIXES if key.startswith(prefix)), "" if key else "ollama")
+        name = next((guess for prefix, guess in KEY_PREFIXES if key.startswith(prefix)), "")      # no key: ChatBrain owns Ollama
     if name == "custom":
         return (name, config.LLM_BASE_URL, config.LLM_MODEL, key) if config.LLM_BASE_URL and config.LLM_MODEL else None
     if name not in PROVIDERS:
@@ -46,12 +47,15 @@ def _provider():
     return name, config.LLM_BASE_URL or base, config.LLM_MODEL or model, key
 
 
-def _system_prompt():
-    now = datetime.datetime.now().strftime("%A %d %B %Y, %I:%M %p")
-    return (f"You are Jarvis, a witty, loyal voice assistant on {config.USER_NAME}'s Windows PC. Your reply is spoken aloud: "
-            "answer in one to three short sentences of plain speech, with no markdown, lists, emojis or links. "
-            f"Now it is {now}. The user lives in {config.DEFAULT_CITY}. If you do not know something, say so briefly "
-            "instead of guessing. You cannot control the PC yourself; other parts of Jarvis do that.")
+def system_prompt(with_time=True):
+    """The instructions every question starts with. ``with_time=False`` leaves out the minute, so the text stays the same
+    all day and a local model can reuse what it has already read of it instead of reading it again every minute."""
+    now = datetime.datetime.now().strftime("%A %d %B %Y, %I:%M %p" if with_time else "%A %d %B %Y")
+    return (f"You are Jarvis, a witty, loyal voice assistant. The user is {config.USER_NAME}; address them as sir. "
+            "Your reply is spoken aloud: answer in one to three short sentences (under 20 words each) of plain speech, with no markdown, lists, "
+            f"emojis or links. Now it is {now}. The user lives in {config.DEFAULT_CITY}. If you do not know something, say so "
+            "briefly instead of guessing. You cannot control the PC or save anything yourself, so never say you did something "
+            "or will remember it; if the user wants something remembered, tell them to say 'remember that' and then the fact.")
 
 
 def _clean(text):
@@ -88,7 +92,7 @@ def ask_model(question):
     if found is None or (found[0] == "ollama" and not available()):
         return None
     name, base, model, key = found
-    messages = [{"role": "system", "content": _system_prompt()}, *_history, {"role": "user", "content": question}]
+    messages = [{"role": "system", "content": system_prompt()}, *_history, {"role": "user", "content": question}]
     try:
         response = requests.post(base.rstrip("/") + "/chat/completions", timeout=TIMEOUT, json={
             "model": model, "messages": messages, "max_tokens": 300, "temperature": 0.6,

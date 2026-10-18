@@ -1,8 +1,10 @@
 """Information tools: time, weather, knowledge, money, location and the state of this PC."""
 import datetime
+import functools
 import math
 import os
 import platform
+import re
 import socket
 import time
 from typing import Literal
@@ -12,6 +14,7 @@ import psutil
 from anthropic import beta_tool
 from anthropic.lib.tools import ToolError
 
+import config
 import rates
 from ._common import get_json, get_text, money, open_url
 
@@ -30,12 +33,64 @@ WEATHER_CODES = {
 }
 
 
+GEOCODER = "https://geocoding-api.open-meteo.com/v1/search"
+COUNTRY_ALIASES = {"usa": "united states", "us": "united states", "america": "united states", "uk": "united kingdom",
+                   "britain": "united kingdom", "england": "united kingdom", "uae": "united arab emirates"}
+
+
+@functools.lru_cache(maxsize=4)
+def _home_country(city):
+    """The country code of the user's home city, or "". When a name could be several places, the one in the user's own
+    country is the likelier: "narayan kagan" is Kagan in Pakistan for someone in Peshawar, not Narayan in India."""
+    if not city:
+        return ""
+    try:
+        found = get_json(GEOCODER, name=city, count=1).get("results") or []
+    except ToolError:
+        return ""
+    return found[0].get("country_code", "") if found else ""
+
+
+def find_place(text):
+    """The place that best matches what was said, or None.
+
+    Understands "Lahore", "Murree in Pakistan" and "Lahore, Pakistan" (the country picks between places of the same name).
+    The geocoder only knows single-word names, so for "narran kaghan" it tries "kaghan" and then "narran" instead of giving up.
+    With no country said, a place in the user's own country wins over one with the same name elsewhere.
+    """
+    name, _, hint = text.strip().partition(" in ") if " in " in text else text.strip().partition(",")
+    name, hint = name.strip(), hint.strip().lower()
+    hint = COUNTRY_ALIASES.get(re.sub(r"^the\s+", "", hint), hint)
+
+    def search(word):
+        return get_json(GEOCODER, name=word, count=10).get("results") or []
+
+    home = "" if hint else _home_country(config.DEFAULT_CITY)
+
+    def best(results):
+        if not hint:
+            return next((p for p in results if home and p.get("country_code") == home), results[0] if results else None)
+        return next((p for p in results if hint in (p.get("country") or "").lower() or hint == (p.get("country_code") or "").lower()
+                     or hint in (p.get("admin1") or "").lower()), None)
+
+    place = best(search(name))
+    if place is None and len(name.split()) > 1:
+        found = list(dict.fromkeys(re.findall(r"[^\W\d_]{3,}", name)))
+        words = sorted(reversed(found), key=len, reverse=True)       # longest first; of two as long, the later word ("Naran Kaghan")
+        for word in words[:3]:
+            found_here = best(search(word))
+            if found_here and (place is None or (home and found_here.get("country_code") == home)):
+                place = found_here                              # the first word that finds anything, unless a later one is at home
+            if place and (hint or not home or place.get("country_code") == home):
+                break
+    return place
+
+
 def weather_report(city):
     """Current weather and today's forecast for a city, from Open-Meteo (no API key needed)."""
-    places = get_json("https://geocoding-api.open-meteo.com/v1/search", name=city, count=1).get("results")
-    if not places:
+    place = find_place(city)
+    if not place:
         raise ToolError(f"I couldn't find a place called {city}.")
-    place = places[0]
     data = get_json(
         "https://api.open-meteo.com/v1/forecast",
         latitude=place["latitude"], longitude=place["longitude"], timezone="auto", forecast_days=1,
@@ -190,6 +245,21 @@ def _local_ip():
         probe.close()
 
 
+def spoken_duration(seconds):
+    """3 days 20:48:58 as "3 days and 20 hours", the way it is said (the clock form was read out digit by digit)."""
+    days, rest = divmod(int(seconds), 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes = rest // 60
+    parts = []
+    if days:
+        parts.append(f"{days} day{'s' if days != 1 else ''}")
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes and not days:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    return " and ".join(parts) or "under a minute"
+
+
 @beta_tool
 def get_system_status() -> str:
     """Get this PC's battery level, CPU and memory use, free disk space and uptime."""
@@ -203,8 +273,7 @@ def get_system_status() -> str:
     root = os.path.abspath(os.sep)
     disk = psutil.disk_usage(root)
     parts.append(f"drive {root[:2]} has {disk.free / 2**30:.0f} GB free of {disk.total / 2**30:.0f} GB")
-    uptime = datetime.timedelta(seconds=int(time.time() - psutil.boot_time()))
-    parts.append(f"running for {uptime}")
+    parts.append(f"running for {spoken_duration(time.time() - psutil.boot_time())}")
     return "; ".join(parts)
 
 

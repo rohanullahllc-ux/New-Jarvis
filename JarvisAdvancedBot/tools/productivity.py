@@ -2,11 +2,13 @@
 import datetime
 import difflib
 import json
+import os
 import re
 import secrets
 import string
 import threading
 from pathlib import Path
+from typing import Literal
 
 import requests
 from anthropic import beta_tool
@@ -14,9 +16,7 @@ from anthropic.lib.tools import ToolError
 
 import config
 from . import _common
-from ._common import copy_to_clipboard, folder, safe_filename
-
-KNOWN_FOLDERS = ("desktop", "documents", "downloads", "pictures", "music", "videos")
+from ._common import KNOWN_FOLDERS, copy_to_clipboard, folder, known_folder, safe_filename
 
 
 # ---------------------------------------------------------------- notes
@@ -49,6 +49,27 @@ def _note_label(path):
     return path.stem
 
 
+def _note_full(path):
+    """A note as it should be read out: untitled notes (named by the time they were taken) are just what they say."""
+    body = _note_body(path)[:300]
+    return body if re.fullmatch(r"note-\d{8}-\d{6}", path.stem) else f"{path.stem}: {body}"
+
+
+@beta_tool
+def open_notes(which: Literal["latest", "folder"] = "latest") -> str:
+    """Open the newest note in Notepad, or the folder that holds all the notes.
+
+    Args:
+        which: "latest" for the most recent note, "folder" for the Notes folder.
+    """
+    notes_dir = _common.DB / "Notes"
+    notes = sorted(notes_dir.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True) if notes_dir.exists() else []
+    if not notes:
+        raise ToolError("There are no saved notes yet.")
+    os.startfile(notes_dir if which == "folder" else notes[0])
+    return "Opened the notes folder" if which == "folder" else f"Opened your latest note: {_note_body(notes[0])[:200]}"
+
+
 @beta_tool
 def read_notes(title: str = "", latest: bool = False) -> str:
     """List the saved notes, or read one of them.
@@ -64,6 +85,8 @@ def read_notes(title: str = "", latest: bool = False) -> str:
     if latest:
         return f"Your latest note: {_note_body(notes[0])[:2000]}"
     if not title:
+        if len(notes) <= 3:                                     # a short list is read in full, not shortened to "and so on"
+            return "Your notes: " + "; ".join(_note_full(p) for p in notes)
         return "Recent notes: " + ", ".join(_note_label(p) for p in notes[:10])
     wanted = title.lower()
     match = next((p for p in notes if wanted in p.stem.lower() or wanted in _note_body(p).lower()), None)
@@ -334,6 +357,39 @@ def _language_code(language):
     raise ToolError(f"I don't know the language {language}. I can translate into: " + ", ".join(sorted(LANGUAGES)))
 
 
+LANGUAGE_NAMES = {}
+for _name, _code in LANGUAGES.items():
+    LANGUAGE_NAMES.setdefault(_code, _name.title())
+
+
+def _google_free_address(text, code):
+    """Google Translate through the free address browser extensions use. It is quicker, and refused less often, than the web
+    page the deep_translator package reads (which answers "too many requests" to this PC)."""
+    response = requests.get("https://translate.googleapis.com/translate_a/single", timeout=12, headers={"User-Agent": "Mozilla/5.0"},
+                            params={"client": "gtx", "sl": "auto", "tl": code, "dt": "t", "q": text})
+    response.raise_for_status()
+    return "".join(part[0] for part in response.json()[0] if part and part[0]).strip()
+
+
+MODEL_TRANSLATES = {"en", "fr", "es", "de", "it", "pt", "ru", "tr", "ar", "zh-CN", "ja", "ko"}   # the small model gets these right
+
+
+def _by_the_local_model(text, code):
+    """The AI model on this PC as a translator: slower than Google but never refused. It is only trusted for the languages it
+    knows well, in and out: its Urdu, Hindi, Pashto, Punjabi and Persian are nonsense, and nonsense is worse than an honest
+    "I can't". Anything that looks like chatter instead of a translation is thrown away."""
+    from JarvisAdvancedBot import ChatBrain
+    if code not in MODEL_TRANSLATES or _guess_source(text) != "en-GB":
+        return ""
+    language = LANGUAGE_NAMES.get(code, code)
+    answer = ChatBrain.complete(f"You are a translator. Translate the user's text into {language}. Reply with the translation only: "
+                                "no notes, no quotes, no explanation.", text)
+    if not answer:
+        return ""
+    answer = answer.strip("\"'“”«» ")
+    return answer if len(answer) <= 4 * len(text) + 40 else ""
+
+
 def _guess_source(text):
     if re.search(r"[؀-ۿ]", text):
         return "ur-PK"
@@ -352,16 +408,21 @@ def translate_text(text: str, target_language: str) -> str:
     """
     code = _language_code(target_language)
     from deep_translator import GoogleTranslator, MyMemoryTranslator
-    try:
-        result = GoogleTranslator(source="auto", target=code).translate(text)
-    except Exception:           # Google's free endpoint sometimes rate-limits; MyMemory is a free backup
+    # In order of quality. Google's free services sometimes refuse a PC for a while ("too many requests"); then the model on this
+    # PC translates (the languages it knows); MyMemory, a crowd-sourced memory that has answered "how are you" with "I'm called
+    # Jay", is the last resort.
+    ways = (lambda: _google_free_address(text, code),
+            lambda: GoogleTranslator(source="auto", target=code).translate(text),
+            lambda: _by_the_local_model(text, code),
+            lambda: MyMemoryTranslator(source=_guess_source(text), target=MYMEMORY_CODES.get(code, code)).translate(text))
+    for way in ways:
         try:
-            result = MyMemoryTranslator(source=_guess_source(text), target=MYMEMORY_CODES.get(code, code)).translate(text)
-        except Exception:
-            raise ToolError("The translation services aren't answering right now.") from None
-    if not result:
-        raise ToolError("I couldn't translate that.")
-    return result
+            result = way()
+        except Exception:                                           # noqa: BLE001 - each service fails in its own way
+            continue
+        if result and result.strip():
+            return result.strip()
+    raise ToolError("The translation services aren't answering right now.")
 
 
 STOP_WORDS = {"a", "an", "the", "of", "and", "or", "for", "to", "in", "on", "at", "by", "with"}
@@ -394,7 +455,7 @@ def create_folder(name: str, location: str = "documents") -> str:
     if not re.fullmatch(r'[^\\/:*?"<>|]{1,80}', name) or name in {".", ".."}:
         raise ToolError("A folder name can't contain \\ / : * ? \" < > |")
     place = location.strip().strip('"')
-    base = Path.home() / place.title() if place.lower() in KNOWN_FOLDERS else Path(place).expanduser()
+    base = known_folder(place) if place.lower() in KNOWN_FOLDERS else Path(place).expanduser()
     if not base.is_dir():
         raise ToolError(f"I can't find the place {location} to put it in.")
     target = base / name
@@ -443,6 +504,6 @@ def generate_password(length: int = 16) -> str:
     return f"Generated a {length}-character password and copied it to the clipboard."
 
 
-TOOLS = [take_note, read_notes, add_task, list_tasks, remove_task, set_reminder, get_timetable_block,
+TOOLS = [take_note, read_notes, open_notes, add_task, list_tasks, remove_task, set_reminder, get_timetable_block,
          add_timetable_block, read_book_page, translate_text, make_acronym, create_folder, ask_wolfram_alpha,
          generate_password]
