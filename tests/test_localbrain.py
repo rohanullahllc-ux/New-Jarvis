@@ -38,6 +38,7 @@ class BrainCase(unittest.TestCase):
             mock.patch.object(L, "read_clipboard", return_value=""),
             mock.patch.object(L, "HOME_CURRENCY", "PKR"),
             mock.patch.object(L, "DEFAULT_CITY", "Peshawar"),
+            mock.patch.object(L.FreeBrain, "available", return_value=False),     # a real key in .env must not change routing
         ):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -196,6 +197,45 @@ class EverydayCommandTests(BrainCase):
     def test_unknown_requests_return_none_so_the_session_can_say_so(self):
         self.assertIsNone(self.no_tool("blorp zzz qqq"))
         self.assertIsNone(self.no_tool(""))
+
+
+class ForgivingPhrasingTests(BrainCase):
+    """Phrasings people (and the speech recogniser) actually produce for things Jarvis already does."""
+
+    def test_notes_in_every_shape(self):
+        for phrase in ("show note", "show notes", "open note", "open the notes", "read note", "notes", "note", "my notes",
+                       "jarvis notes", "what notes do i have", "do i have any notes", "see my notes", "check my notes",
+                       "open my notes app"):
+            self.routes(phrase, "read_notes", "")
+
+    def test_the_latest_note(self):
+        for phrase in ("read my last note", "show the latest note", "what was my last note", "last note"):
+            self.routes(phrase, "read_notes", "", True)
+
+    def test_jarvis_own_tools_by_bare_name_or_with_filler(self):
+        for phrase in ("calculator", "jarvis calculator", "open calculator", "open the calculator app", "launch calc", "calc",
+                       "show me the calculator", "start the calculator window"):
+            self.routes(phrase, "open_utility_app", "calculator")
+        for phrase in ("calendar", "jarvis calendar", "calender", "open the calendar app", "show my calendar"):
+            self.routes(phrase, "open_utility_app", "calendar")
+        for phrase in ("currency converter", "currency convertor", "open currency", "jarvis currency converter"):
+            self.routes(phrase, "open_utility_app", "currency_converter")
+
+    def test_the_windows_one_only_when_asked_for(self):
+        self.routes("open the system calculator", "open_app", "calculator")
+        self.routes("open windows calculator", "open_app", "calculator")
+        self.routes("open default calendar app", "open_app", "calendar")
+
+    def test_other_bare_words(self):
+        self.routes("to do", "list_tasks")
+        self.routes("tasks", "list_tasks")
+        self.routes("weather", "weather_report", "Peshawar")
+        self.routes("jarvis screenshot", "take_screenshot")
+
+    def test_bare_words_do_not_swallow_real_commands(self):
+        self.routes("open chrome", "open_app", "chrome")
+        self.routes("play time of my life", "youtube", "time of my life")
+        self.routes("take a note that the time is wrong", "take_note", "the time is wrong")
 
 
 class PowerTests(BrainCase):

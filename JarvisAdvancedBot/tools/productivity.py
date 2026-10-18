@@ -50,16 +50,19 @@ def _note_label(path):
 
 
 @beta_tool
-def read_notes(title: str = "") -> str:
+def read_notes(title: str = "", latest: bool = False) -> str:
     """List the saved notes, or read one of them.
 
     Args:
         title: Part of the note's title or of what it says, or empty to list the most recent notes.
+        latest: True to read the most recently saved note in full.
     """
     notes_dir = _common.DB / "Notes"
     notes = sorted(notes_dir.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True) if notes_dir.exists() else []
     if not notes:
         return "There are no saved notes."
+    if latest:
+        return f"Your latest note: {_note_body(notes[0])[:2000]}"
     if not title:
         return "Recent notes: " + ", ".join(_note_label(p) for p in notes[:10])
     wanted = title.lower()

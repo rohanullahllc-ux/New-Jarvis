@@ -190,10 +190,17 @@ class DispatcherTests(unittest.TestCase):
             outcome = MainCode.handle_command(text, ask=lambda question: "")
         return outcome, spoken, reply, reset
 
-    def test_unknown_commands_get_an_honest_answer(self):
-        outcome, spoken, _, _ = self.handle("blorp zzz qqq")
+    def test_unknown_commands_get_an_honest_answer_that_helps(self):
+        with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value=None),                 mock.patch("JarvisAdvancedBot.FreeBrain.available", return_value=False):
+            outcome, spoken, _, _ = self.handle("calculater please")
         self.assertIsNone(outcome)
-        self.assertIn("I don't know how to do that yet", spoken[0])
+        self.assertIn("didn't understand that as a command", spoken[0])
+        self.assertIn("open calculator", spoken[0])
+
+    def test_questions_no_command_covers_are_answered_by_the_free_brain(self):
+        with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value="Because of scattering."):
+            _, spoken, _, _ = self.handle("blorp why is the sky blue zzz")
+        self.assertEqual(spoken, ["Because of scattering."])
 
     def test_very_short_noise_is_ignored(self):
         _, spoken, _, _ = self.handle("uh")

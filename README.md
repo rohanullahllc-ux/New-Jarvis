@@ -46,6 +46,20 @@ touch:
 | `WOLFRAM_APP_ID` | Optional, for "ask Wolfram ..." and for questions Wikipedia can't answer |
 | `EMAIL_ADDRESS`, `EMAIL_PASSWORD` | For sending email. Use an **app password**, never your real one |
 
+## Answering any question, for free
+
+The built-in commands are patterns, so they cannot chat or explain ("why is the sky blue"). Behind them Jarvis has a
+free answer layer. Without setup it uses DuckDuckGo and Wikipedia, which only cover facts. For real answers give it a
+free AI model, either one of these:
+
+* **A free key (best, fast):** make one with no card at console.groq.com (Groq) or aistudio.google.com (Gemini), and
+  paste it as `LLM_API_KEY` in `.env`. Jarvis recognises which service it is. Your questions go to that service.
+* **A model on this PC (offline, slow on weak hardware):** install Ollama, run `ollama pull qwen2.5:3b`, leave
+  `LLM_API_KEY` empty. Jarvis uses it automatically while Ollama is running.
+
+Commands (open, notes, timers...) are always handled by the built-in patterns first; only the rest goes to the AI.
+When nothing can answer, Jarvis suggests the closest real commands instead of giving up.
+
 ## What you can say
 
 Phrases are matched loosely; these are examples.

@@ -58,8 +58,24 @@ def handle_command(query, ask=None):
         return None
 
     reply = LocalReply(query, ask)
-    Speak(reply if reply is not None else "Sorry sir, I don't know how to do that yet. Say 'what can you do' to hear my skills.")
+    if reply is None:
+        reply = _answer_anything(query)
+    Speak(reply)
     return None
+
+
+def _answer_anything(query):
+    """Nothing matched a command: ask the free AI model or the web, and only then admit it, with ideas of what to say."""
+    from JarvisAdvancedBot import FreeBrain
+    from JarvisAdvancedBot.LocalBrain import suggest
+    reply = FreeBrain.answer(query)
+    if reply:
+        return reply
+    ideas = suggest(query)
+    hint = (" Did you mean: " + "; or ".join(f"'{idea}'" for idea in ideas) + "?") if ideas else " Say 'what can you do' to hear my skills."
+    setup = "" if FreeBrain.available() else (" To let me answer any question, add a free key as LLM API KEY in the dot env file; "
+                                              "the README explains how.")
+    return "Sorry sir, I didn't understand that as a command." + hint + setup
 
 
 # ---------------------------------------------------------------- start-up

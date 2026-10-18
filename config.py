@@ -61,6 +61,13 @@ ANTHROPIC_API_KEY = key("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = key("CLAUDE_MODEL", "claude-opus-5-5")
 CLAUDE_EFFORT = key("CLAUDE_EFFORT", "low")         # low = quickest replies; medium/high think more
 
+# ---- Free AI model (optional): lets Jarvis answer questions no command pattern covers -------------
+LLM_PROVIDER = key("LLM_PROVIDER", "auto").lower()  # auto | groq | gemini | openrouter | ollama | custom
+LLM_API_KEY = key("LLM_API_KEY")                    # a FREE key from console.groq.com or aistudio.google.com
+LLM_MODEL = key("LLM_MODEL")                        # blank = a sensible free model for the provider
+LLM_BASE_URL = key("LLM_BASE_URL")                  # only for provider=custom (any OpenAI-compatible service)
+OLLAMA_URL = key("OLLAMA_URL", "http://localhost:11434")
+
 # ---- Third-party services (all optional) --------------------------------
 WOLFRAM_APP_ID = key("WOLFRAM_APP_ID")
 NASA_API_KEY = key("NASA_API_KEY", "DEMO_KEY")      # DEMO_KEY works with low rate limits

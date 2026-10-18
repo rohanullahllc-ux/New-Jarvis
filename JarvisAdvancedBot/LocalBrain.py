@@ -9,6 +9,7 @@ for ("open downloads" before "open <app>", "temperature of Mars" before "tempera
 the Wikipedia catch-all stays last.
 """
 import datetime
+import difflib
 import random
 import re
 import threading
@@ -20,6 +21,7 @@ from anthropic.lib.tools import ToolError
 import calc
 import config
 from config import DEFAULT_CITY, HOME_CURRENCY
+from JarvisAdvancedBot import FreeBrain
 from JarvisAdvancedBot import tools as T
 from JarvisAdvancedBot.tools._common import read_clipboard
 from JarvisAdvancedBot.tools.productivity import LANGUAGES
@@ -288,9 +290,13 @@ def take_note(m, ask):
     return T.take_note(text) + "." if text else "Okay, no note then."
 
 
-@intent(r"\b(?:read|show|list|open|what are)(?: me)?(?: all)? (?:my |the )?notes?\b")
+@intent(r"\b(?:read|show|list|open|see|check|view|what are|what is in|what's in|do i have)(?: me)?(?: all)? (?:my |the |any )?(?:last |latest |recent |saved )?notes?\b",
+        r"\bwhat notes\b", r"\b(?:last|latest|recent) note\b")
 def read_notes(m, ask):
+    if re.search(r"\b(?:last|latest|newest|recent) note\b", m.string):
+        return T.read_notes("", True)
     title = re.sub(r".*?\bnotes?\b(?: (?:about|called|named|on))?\s*", "", m.string, count=1).strip()
+    title = "" if re.fullmatch(r"(?:do i have|i have|do i|i)?(?: any)?", title) else title
     return _sentences(T.read_notes(title), 4)
 
 
@@ -346,9 +352,22 @@ def open_a_folder(m, ask):
     return f"Opening {'drive ' + where.upper() if len(where) == 1 else 'your ' + where + ' folder'}, sir."
 
 
-@intent(r"^(?:open|launch|start|show)(?: me)? (?:the |my |a )?(?P<name>calculator|calendar|currency convert[eo]r)$")
+@intent(r"^(?:open|launch|start|run|show|use)(?: me)? (?:the |my |a )?(?:system|windows|default) (?P<name>calculator|calendar)(?: app| application| program)?$")
+def open_the_windows_one(m, ask):
+    T.open_app(m["name"])
+    return f"Opening the Windows {m['name']}, sir."
+
+
+UTILITY_ALIASES = {"calc": "calculator", "calculation": "calculator", "calender": "calendar", "currency": "currency converter",
+                   "currency convertor": "currency converter", "exchange rate converter": "currency converter"}
+
+
+@intent(r"^(?:(?:open|launch|start|run|show|use|bring up)(?: me)? )?(?:the |my |a |your )?"
+        r"(?P<name>calculator|calc|calculation|calendar|calender|currency convert[eo]r|currency|exchange rate converter)"
+        r"(?: app| application| program| window)?$")
 def open_a_utility(m, ask):
-    name = m["name"].replace(" ", "_").replace("convertor", "converter")
+    said = UTILITY_ALIASES.get(m["name"], m["name"])
+    name = said.replace(" ", "_").replace("convertor", "converter")
     try:
         T.open_utility_app(name)
     except ToolError:                                    # Jarvis's own window isn't installed: use Windows' or the web
@@ -358,7 +377,7 @@ def open_a_utility(m, ask):
             T.open_website("https://calendar.google.com")
         else:
             raise
-    return f"Opening the {m['name']}, sir."
+    return f"Opening the {said}, sir."
 
 
 # ---------------------------------------------------------------- searches (before weather, so "search for weather radar" searches)
@@ -833,6 +852,10 @@ def close_something(m, ask):
         r"^what does (?P<q>.+) mean$", r"^(?:who|what) (?:is|are|was|were) (?:a |an |the )?(?P<q>.+)$",
         r"^(?:where|when) (?:is|was|are|were|did) (?P<q>.+)$")
 def knowledge(m, ask):
+    if FreeBrain.available():                           # an AI model explains and discusses far better than a Wikipedia summary
+        reply = FreeBrain.ask_model(original() or m.string)
+        if reply:
+            return reply
     try:
         return _sentences(T.search_wikipedia(m["q"]))
     except ToolError as not_on_wikipedia:
@@ -844,12 +867,58 @@ def knowledge(m, ask):
         raise not_on_wikipedia
 
 
+# ---------------------------------------------------------------- bare words, and "did you mean"
+
+BARE_WORDS = {
+    "notes": "show my notes", "note": "show my notes", "my notes": "show my notes",
+    "to do": "what's on my to do list", "todo": "what's on my to do list", "to do list": "what's on my to do list",
+    "tasks": "what's on my to do list", "task list": "what's on my to do list",
+    "reminders": "what's on my to do list", "screenshot": "take a screenshot", "weather": "what's the weather",
+    "time": "what time is it", "date": "what's the date", "joke": "tell me a joke", "battery": "how is the battery",
+    "volume up": "volume up", "volume down": "volume down", "mute": "mute",
+}
+_LEADING = re.compile(r"^(?:(?:open|launch|start|run|show|display|use|see|check|view|read|go to|bring up|give me|tell me)\s+)+"
+                      r"(?:(?:me|the|my|a|your|jarvis)\s+)*")
+_TRAILING = re.compile(r"(?:\s+(?:app|application|program|window|please|now))+$")
+
+EXAMPLES = [
+    "open calculator", "open calendar", "open currency converter", "open chrome", "open downloads", "open drive d",
+    "show my notes", "take a note that buy milk", "read my last note", "add buy bread to my to do list",
+    "what's on my to do list", "remind me in 10 minutes to drink water", "what's on my time table",
+    "what time is it", "what's the weather in London", "bitcoin price", "100 dollars in rupees", "tell me a joke",
+    "translate good morning to Urdu", "who is Alan Turing", "play despacito", "volume up", "take a screenshot",
+    "how much RAM do I have", "NASA picture of the day", "where is the ISS", "tell me about Jupiter",
+    "send an email", "shut down the computer", "generate a password", "show Lahore on the map",
+    "business names for coffee shop", "COVID cases in Pakistan", "what can you do",
+]
+
+
+def _canonical(text):
+    """"jarvis calculator" style bare words, with or without open/show/the/app, become a full command."""
+    core = _TRAILING.sub("", _LEADING.sub("", text)).strip()
+    return BARE_WORDS.get(core, text)
+
+
+def suggest(query, count=3):
+    """The example commands closest to what was said, for a "did you mean" reply."""
+    text = normalize(query)
+    words = set(re.findall(r"[a-z]{3,}", text))
+    scored = []
+    for example in EXAMPLES:
+        overlap = len(words & set(re.findall(r"[a-z]{3,}", example.lower())))
+        ratio = difflib.SequenceMatcher(None, text, example.lower()).ratio()
+        if overlap or ratio > 0.55:
+            scored.append((overlap + ratio, example))
+    return [example for _, example in sorted(scored, reverse=True)[:count]]
+
+
 def LocalReply(query, ask=lambda question: ""):
     """Return the reply for a command, or None if it wasn't understood."""
     _context.query = query
     text = normalize(query)
     if not text:
         return None
+    text = _canonical(text)
     for pattern, handler in INTENTS:
         match = pattern.search(text)
         if not match:
