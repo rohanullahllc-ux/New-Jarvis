@@ -222,6 +222,29 @@ def open_folder(location: str) -> str:
 
 
 @beta_tool
+def microphone_level(percent: int = 0, change: int = 0, unmute: bool = False) -> str:
+    """Report or change the Windows microphone input volume. A microphone turned down low is why Jarvis misses words.
+
+    Args:
+        percent: Set the microphone volume to this many percent (1 to 100). Leave 0 to only report it.
+        change: Instead of a fixed value, raise (positive) or lower (negative) the volume by this many points.
+        unmute: True to switch off the microphone's mute.
+    """
+    import audio_levels
+    try:
+        volume, muted = audio_levels.state()
+        if unmute and muted:
+            audio_levels.set_muted(False)
+            muted = False
+        if percent or change:
+            volume = audio_levels.set_volume(percent or volume + change)
+    except audio_levels.AudioError as error:
+        raise ToolError(str(error)) from None
+    state = "muted" if muted else "not muted"
+    return f"The microphone volume is {volume} percent, {state}. " + (audio_levels.advice(volume, muted) or "That should be enough.")
+
+
+@beta_tool
 def open_utility_app(name: Literal["calculator", "calendar", "currency_converter"]) -> str:
     """Open one of Jarvis's own small windows: a calculator, a month calendar, or a currency converter.
 
@@ -236,4 +259,4 @@ def open_utility_app(name: Literal["calculator", "calendar", "currency_converter
 
 
 TOOLS = [open_app, close_app, windows_action, browser_action, take_screenshot, open_screenshots, system_power_action,
-         open_folder, open_utility_app]
+         open_folder, open_utility_app, microphone_level]

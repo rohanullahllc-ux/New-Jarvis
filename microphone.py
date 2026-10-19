@@ -433,6 +433,7 @@ def _ensure_ready():
             _calibration.update(at=time.monotonic(), base=recognizer.energy_threshold, misses=0)
             _clamp_threshold()
             print(f": Microphone ready [{mic_status()}]. Say a wake word like 'hey jarvis'.")
+            _check_windows_volume()
             return True
         except (MicrophoneError, OSError) as e:
             print(f": Microphone problem: {e}")
@@ -440,6 +441,31 @@ def _ensure_ready():
             if not _failover(e):
                 break
     return False
+
+
+_volume_checked = [False]
+
+
+def _check_windows_volume():
+    """Once per run, in the background: tell the user if Windows has the microphone muted or turned down low, which is the usual
+    reason a voice assistant misses words."""
+    if _volume_checked[0]:
+        return
+    _volume_checked[0] = True
+
+    def look():
+        global last_note
+        try:
+            import audio_levels
+            volume, muted = audio_levels.state()
+        except Exception:                            # noqa: BLE001 - this is only advice; Jarvis works without it
+            return
+        advice = audio_levels.advice(volume, muted)
+        if advice:
+            print(f": {advice}")
+            last_note = last_note or advice
+
+    threading.Thread(target=look, name="mic-volume-check", daemon=True).start()
 
 
 def _clamp_threshold():
@@ -765,6 +791,17 @@ def diagnose(only_backend=None, speak_test=True):
                             "(and 'Let desktop apps access your microphone').")
         else:
             line("OK" if value == "Allow" else "INFO", f"{label}: {value or 'not set (defaults apply)'}")
+
+    print("1b) Windows microphone volume")
+    try:
+        import audio_levels
+        volume, muted = audio_levels.state()
+        advice = audio_levels.advice(volume, muted)
+        line("WARN" if advice else "OK", f"input volume {volume} percent, {'MUTED' if muted else 'not muted'}")
+        if advice:
+            problems.append(advice)
+    except Exception as e:                           # noqa: BLE001
+        line("INFO", f"could not read the Windows microphone volume ({e})")
 
     print("2) Input devices")
     try:

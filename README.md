@@ -108,6 +108,9 @@ within a few seconds.
 * **A quiet voice is made louder** before it is sent, the loudness that counts as speech is kept within sensible limits, and the
   room is measured again now and then or after three tries that heard nothing.
 * **He tells you why** when he heard something but could not make it out, or your voice is too quiet for the microphone.
+* **The Windows microphone volume matters most.** At start-up Jarvis checks it and says so if it is muted or under 50 percent (the
+  usual reason words go missing). Say "what is my microphone volume", "set the microphone volume to 80", "raise the mic" or
+  "unmute the microphone", or run `python audio_levels.py` (`--mic 80` sets it).
 * Check the whole chain with `python microphone.py` (it asks you to say a sentence and shows the levels).
 
 ## Understanding loosely worded commands (a model you train yourself)
@@ -197,7 +200,7 @@ gate.py                       password (salted hash) and the optional camera che
 transcript.py                 the private record of conversations (and python transcript.py to read it)
 MainCode.py                   one session: greet, then take commands until sleep or quit
 JarvisAdvancedBot/
-  tools/                      every ability, written once (63 tools), used by both brains
+  tools/                      every ability, written once (64 tools), used by both brains
   LocalBrain.py               the free brain: patterns -> tools. Order matters, see its header
   NLU.py                      the second chance: your own trained model for loosely worded commands
   ChatBrain.py                chat with a model on this PC (Ollama): streaming, memory, facts, lookups

@@ -1104,6 +1104,23 @@ class RewordedCommandTests(SlightlyDifferentWordingTests):
         self.assertTrue(self.say("is the laptop plugged in"))
 
 
+class MicrophoneVolumeCommandTests(BrainCase):
+    def test_the_microphone_volume_can_be_asked_about_set_raised_lowered_and_unmuted(self):
+        self.routes("set microphone volume to 80", "microphone_level", 80)
+        self.routes("increase my mic to eighty percent", "microphone_level", 80)
+        self.routes("raise the microphone volume", "microphone_level", 0, 25)
+        self.routes("microphone volume up", "microphone_level", 0, 25)
+        self.routes("turn up the mic", "microphone_level", 0, 25)
+        self.routes("lower the mic", "microphone_level", 0, -25)
+        self.routes("what is my microphone volume", "microphone_level")
+        self.routes("is my mic muted", "microphone_level")
+        self.routes("unmute the microphone", "microphone_level", 0, 0, True)
+
+    def test_the_speaker_volume_commands_are_not_taken_over(self):
+        self.routes("volume up", "media_control", "volume_up", 5)
+        self.routes("mute", "media_control", "mute", 1)
+
+
 class IsCommandTests(BrainCase):
     """LocalBrain.is_command chooses between the sentences speech recognition may have heard."""
 

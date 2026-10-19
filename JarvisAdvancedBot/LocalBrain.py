@@ -666,6 +666,30 @@ intent(r"\b(?:computer|pc|laptop|system)\b.*\b(?:sleep|hibernate|suspend)\b",
 PLACES = r"desktop|documents|downloads|pictures"
 
 
+MIC = r"(?:mic|microphone|mike)"
+
+
+@intent(rf"^(?:(?:set|make|change|put|turn|raise|increase|lower|decrease|reduce|boost|adjust|fix)(?: up| down)?(?: the| my)? {MIC}"
+        rf"(?: volume| level| gain| sensitivity)?(?: up| down)?(?: (?:to|at) (?P<n>[\w ]+?)(?: percent| per cent|%)?)?"
+        rf"|(?:what(?:'s| is)|check|how is|how loud is|is)(?: the| my)? {MIC}(?: volume| level| gain)?(?: muted| ok| okay| working)?"
+        rf"|(?:unmute|un-mute)(?: the| my)? {MIC})$",
+        rf"^(?:turn|speak|make it) (?:up )?{MIC} (?:louder|quieter|softer)$",
+        rf"^{MIC} (?:volume|level|gain) (?:up|down|higher|lower|(?:to|at) [\w ]+?(?: percent| per cent|%)?)$")
+def microphone_volume(m, ask):
+    """Report, raise, lower or set the Windows microphone volume (a microphone turned down low is why words go missing)."""
+    text = Frames.numerals(m.string)
+    digits = re.search(r"\b(?:to|at)\s+(\d+)\b", text)
+    if re.search(r"\b(?:unmute|un-mute)\b", text):
+        return T.microphone_level(0, 0, True)
+    if digits:
+        return T.microphone_level(int(digits.group(1)))
+    if re.search(r"\b(?:raise|increase|boost|up|louder|fix)\b", text):
+        return T.microphone_level(0, 25)
+    if re.search(r"\b(?:lower|decrease|reduce|down|quieter|softer)\b", text):
+        return T.microphone_level(0, -25)
+    return T.microphone_level()
+
+
 @intent(r"^(?:open|show|go to|browse)(?: me)?(?: the| my)? (?:tasks?|to ?do) (?:folder|holder|fol?der|directory)$")
 def open_tasks_folder(m, ask):
     from JarvisAdvancedBot.tools._common import folder
