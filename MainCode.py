@@ -19,6 +19,8 @@ from speech import Speak, SpeakStream, add_listener, remove_listener
 # them ("Your list for tomorrow includes: wake up, breakfast, lunch...").
 PERSONAL_DATA = re.compile(r"(?=.*\b(?:my|today'?s|tomorrow'?s|today|tomorrow|tonight|i have|do i have)\b)"
                            r"(?=.*\b(?:to[- ]?do|todo|tasks?|schedule[ds]?|reminders?|time ?table|appointments?|calendar|list)\b)", re.I)
+EDIT_DATA = re.compile(r"(?=.*\b(?:clear|delete|remove|erase|wipe|cross off|tick off|mark)\b)"
+                       r"(?=.*\b(?:notes?|tasks?|to[- ]?do|todo|list|reminders?)\b)", re.I)
 SLEEP_COMMAND = re.compile(r"(?:you can )?(?:go to |take (?:a )?)?(?:sleep|rest)(?: mode)?(?: now)?")
 GREETING_LEAD = re.compile(r"(?:hello|hi|hey|ok|okay|alright|please)[ ,]+(?=\S)")
 STOP_COMMAND = re.compile(r"(?:(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?(?: exit)?"
@@ -108,6 +110,11 @@ def _handle_one(query, ask):
             transcript.source("fragment")
             Speak("Sorry sir, I only caught part of that. Could you say it again?")
             return None
+    if reply is None and EDIT_DATA.match(query):
+        transcript.source("fallback")
+        Speak("Sorry sir, I couldn't make that out, so I haven't changed anything. Try: clear all notes, clear all tasks, "
+              "remove task 2, remove buy bread from my to do list, or delete the last note.")
+        return None
     if reply is None and PERSONAL_DATA.match(query):
         transcript.source("fallback")
         Speak("Sorry sir, I couldn't make that out as a command about your list or schedule, and I won't guess what is on it. "

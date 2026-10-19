@@ -306,7 +306,10 @@ def list_tasks(m, ask):
         r".*?\b(?:task|item|number)\s+(\S+)")
 def remove_task(m, ask):
     number = _number(m.group(1))
-    return T.remove_task(int(number)) if number else None
+    if not number:
+        return None
+    day = DAY_WORDS.search(m.string)
+    return (T.remove_task(int(number), _day_from_word(day.group(1))) if day else T.remove_task(int(number))) + "."
 
 
 # ---------------------------------------------------------------- time table (the user's own routine)
@@ -391,18 +394,61 @@ def start_notes(m, ask):
     return T.take_note(text) + "." if text else "Okay, no note then."
 
 
-@intent(r"^(?:clear|delete|erase|remove|wipe)(?: all)?(?: of)?(?: my| the)?(?: saved)? notes$")
-def clear_notes(m, ask):
-    from JarvisAdvancedBot.tools._common import folder
-    files = sorted(folder("Notes").glob("*.txt"))
-    if not files:
-        return "There are no saved notes to clear, sir."
-    count = f"{len(files)} note{'' if len(files) == 1 else 's'}"
-    if not _confirmed(ask, f"This will permanently delete {count}. Say yes or no."):
-        return "Okay, I've kept your notes."
-    for note in files:
-        note.unlink()
-    return f"Deleted {count}, sir."
+WEEKDAY_WORDS = "today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+TASKS_WORD = r"(?:tasks|task list|to ?do list|to-do list|todo list|to ?dos|todos|to ?do|todo)"
+
+
+@intent(rf"^(?:clear|delete|erase|remove|wipe|empty)(?P<every> all| every| everything)?(?: of)?(?: my| the)?(?: saved)? "
+        rf"(?P<what>notes and (?:the )?{TASKS_WORD}|{TASKS_WORD} and notes|notes|{TASKS_WORD})(?: for (?P<day>{WEEKDAY_WORDS}))?$")
+def clear_data(m, ask):
+    """Delete notes and/or to-do items after a yes. "All" (or both kinds at once) means every day's list; a day named means that day."""
+    from JarvisAdvancedBot.tools import productivity
+    what = m["what"]
+    notes, tasks = "note" in what, bool(re.search(r"task|to ?do|to-do", what))
+    every_day = bool(m["every"]) or (notes and tasks)
+    day = _day_from_word(m["day"]) if m["day"] else ""
+    if day:
+        every_day = False
+    note_count = len(productivity.pick_notes("all")) if notes else 0
+    task_count = productivity.count_tasks(None if every_day else (datetime.date.fromisoformat(day) if day else datetime.date.today())) if tasks else 0
+    parts = ([f"{note_count} note{'' if note_count == 1 else 's'}"] if note_count else []) + \
+            ([f"{task_count} to-do item{'' if task_count == 1 else 's'}"] if task_count else [])
+    if not parts:
+        return "There is nothing to clear, sir: " + ("no saved notes" if notes and not tasks else "no to-do items" if tasks and not notes
+                                                      else "no saved notes and no to-do items") + "."
+    if not _confirmed(ask, f"This will permanently delete {' and '.join(parts)}. Say yes or no."):
+        return "Okay, I've kept them."
+    if note_count:
+        T.delete_notes("all", confirmed=True)
+    if task_count:
+        T.clear_tasks(day, every_day, True)
+    return f"Deleted {' and '.join(parts)}, sir."
+
+
+@intent(rf"^(?:remove|delete|cross off|tick off|erase|drop|scratch)(?: the| my)?(?: task| item)? (?P<what>.+?) (?:from|off|on|in) (?:my |the )?(?:to ?do|to-do|todo|task)s?(?: list)?(?: for (?P<day>{WEEKDAY_WORDS}))?$",
+        rf"^(?:mark|tick|check off|cross off) (?:the )?(?:task |item )?(?P<what>.+?)(?: as)? (?:done|finished|complete|completed)(?: for (?P<day>{WEEKDAY_WORDS}))?$",
+        rf"^(?:remove|delete|erase|drop|scratch)(?: the| my)? (?:task|item) (?P<what>.+?)(?: for (?P<day>{WEEKDAY_WORDS}))?$",
+        rf"^(?:cross off|tick off|check off) (?:the )?(?:task |item )?(?P<what>.+?)(?: for (?P<day>{WEEKDAY_WORDS}))?$")
+def remove_task_by_words(m, ask):
+    what, day = m["what"].strip(), (_day_from_word(m["day"]) if m["day"] else "")
+    number = _number(what)
+    if number:
+        return (T.remove_task(int(number), day) if day else T.remove_task(int(number))) + "."
+    return T.remove_task(0, day, _as_typed(what)) + "."
+
+
+@intent(rf"^(?:delete|remove|erase)(?: the| my)? (?P<which>last|latest|newest|recent) note$",
+        r"^(?:delete|remove|erase)(?: the| my)? note(?: called| named| about| titled| with| saying)? (?P<title>.+)$")
+def delete_one_note(m, ask):
+    from JarvisAdvancedBot.tools import productivity
+    title = (m.groupdict().get("title") or "").strip()
+    chosen = productivity.pick_notes("latest", _as_typed(title))
+    if not chosen:
+        return "There are no saved notes to delete, sir."
+    if not _confirmed(ask, f"This will permanently delete the note {chosen[0].stem}. Say yes or no."):
+        return "Okay, I've kept it."
+    T.delete_notes("latest", _as_typed(title), True)
+    return "Deleted that note, sir."
 
 
 NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note|note (?:that|down))"

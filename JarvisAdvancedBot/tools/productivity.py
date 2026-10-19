@@ -143,21 +143,134 @@ def list_tasks(date: str = "") -> str:
     return f"To-do list for {day:%A %d %B}: " + "; ".join(f"{i}. {t}" for i, t in enumerate(tasks, 1))
 
 
+def _all_task_files():
+    folder_ = _common.DB / "Tasks"
+    return sorted(folder_.glob("*-Task.txt")) if folder_.is_dir() else []
+
+
+def count_tasks(day=None):
+    """How many to-do items there are on one day, or on every day (``day`` None)."""
+    files = [_task_file(day)] if day else _all_task_files()
+    return sum(len([line for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]) for f in files if f.exists())
+
+
+def _find_task(text, day, tasks, search_other_days):
+    """(day, that day's tasks, item number) for the one item whose words match ``text``."""
+    wanted = " ".join(text.lower().split())
+
+    def hits(items):
+        exact = [i for i, t in enumerate(items, 1) if wanted in t.lower()]
+        if exact:
+            return exact
+        size = len(wanted.split())
+
+        def close(task):                                   # the closest stretch of the task's words, so one typo still matches
+            words = task.lower().split()
+            stretches = [" ".join(words[k:k + size]) for k in range(max(1, len(words) - size + 1))]
+            return max(difflib.SequenceMatcher(None, wanted, stretch).ratio() for stretch in stretches) >= 0.8
+
+        return [i for i, t in enumerate(items, 1) if close(t)]
+
+    found = hits(tasks)
+    if len(found) > 1:
+        raise ToolError("Several items match: " + "; ".join(f"{i}. {tasks[i - 1]}" for i in found) + ". Which number do you mean?")
+    if found:
+        return day, tasks, found[0]
+    if search_other_days:                                  # no day was named: the item may be on another day's list
+        matches = []
+        for path in _all_task_files():
+            other = datetime.date.fromisoformat(path.name[:10])
+            items = _read_tasks(other)
+            matches += [(other, items, i) for i in hits(items)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ToolError("That matches items on several days: " + "; ".join(f"{d:%A %d %B}: {items[i - 1]}" for d, items, i in matches)
+                            + ". Tell me the day.")
+    raise ToolError(f"I can't find an item like '{text}' on the to-do list for {day:%A %d %B}.")
+
+
 @beta_tool
-def remove_task(number: int, date: str = "") -> str:
-    """Remove a finished item from the to-do list.
+def remove_task(number: int = 0, date: str = "", text: str = "") -> str:
+    """Remove one finished or unwanted item from the to-do list, by its number (as read out by list_tasks) or by some of its words.
 
     Args:
-        number: The item's number, as given by list_tasks.
-        date: Day as YYYY-MM-DD, or empty for today.
+        number: The item's number, as given by list_tasks. Leave out (0) when giving words instead.
+        date: Day as YYYY-MM-DD, or empty for today (when only words are given, other days are searched too).
+        text: Some words of the item, when its number is not known.
     """
     day = _parse_day(date)
     tasks = _read_tasks(day)
+    if not number and text.strip():
+        day, tasks, number = _find_task(text, day, tasks, search_other_days=not date)
+    elif not number:
+        raise ToolError("Tell me which item to remove: its number, or some of its words.")
     if not 1 <= number <= len(tasks):
         raise ToolError(f"There is no item {number}; the list has {len(tasks)} items.")
     removed = tasks.pop(number - 1)
-    _task_file(day).write_text("".join(t + "\n" for t in tasks), encoding="utf-8")
+    path = _task_file(day)
+    if tasks:
+        path.write_text("".join(t + "\n" for t in tasks), encoding="utf-8")
+    else:
+        path.unlink()
     return f"Removed: {removed}"
+
+
+@beta_tool
+def clear_tasks(date: str = "", every_day: bool = False, confirmed: bool = False) -> str:
+    """Delete every item from the to-do list of one day, or of every day. Permanent: tell the user how many items will go, and call this with confirmed=true only after they clearly agree.
+
+    Args:
+        date: Day as YYYY-MM-DD, or empty for today. Ignored when every_day is true.
+        every_day: True to clear the lists of all days.
+        confirmed: True only after the user has agreed to this deletion.
+    """
+    days = [None] if every_day else [_parse_day(date)]
+    count = count_tasks(days[0])
+    if not count:
+        return "There were no to-do items to clear."
+    if not confirmed:
+        raise ToolError(f"This would permanently delete {count} to-do item{'' if count == 1 else 's'}. Ask the user first, "
+                        "then call again with confirmed set to true.")
+    for path in (_all_task_files() if every_day else [_task_file(days[0])]):
+        if path.exists():
+            path.unlink()
+    return f"Cleared {count} to-do item{'' if count == 1 else 's'}."
+
+
+def pick_notes(which="all", title=""):
+    """The note files a request means: every note, the newest one, or the one whose name or words contain ``title``."""
+    folder_ = _common.DB / "Notes"
+    notes = sorted(folder_.glob("*.txt"), key=lambda p: p.stat().st_mtime) if folder_.is_dir() else []
+    if title.strip():
+        wanted = title.strip().lower()
+        matches = [n for n in notes if wanted in n.stem.lower() or wanted in n.read_text(encoding="utf-8", errors="replace").lower()]
+        if not matches:
+            raise ToolError(f"I can't find a note about '{title.strip()}'.")
+        if len(matches) > 1:
+            raise ToolError("Several notes match: " + ", ".join(n.stem for n in matches[:6]) + ". Tell me more of the name.")
+        return matches
+    return notes[-1:] if which == "latest" else notes
+
+
+@beta_tool
+def delete_notes(which: Literal["all", "latest"] = "all", title: str = "", confirmed: bool = False) -> str:
+    """Permanently delete notes: all of them, the newest one, or the one whose name or words contain a title. Tell the user how many will go, and call this with confirmed=true only after they clearly agree.
+
+    Args:
+        which: all for every note, or latest for the newest one. Ignored when title is given.
+        title: Some of the note's name or words, to delete just that note.
+        confirmed: True only after the user has agreed to this deletion.
+    """
+    chosen = pick_notes(which, title)
+    if not chosen:
+        return "There are no saved notes to delete."
+    if not confirmed:
+        raise ToolError(f"This would permanently delete {len(chosen)} note{'' if len(chosen) == 1 else 's'}. Ask the user first, "
+                        "then call again with confirmed set to true.")
+    for note in chosen:
+        note.unlink()
+    return f"Deleted {len(chosen)} note{'' if len(chosen) == 1 else 's'}."
 
 
 # ---------------------------------------------------------------- reminders
@@ -504,6 +617,6 @@ def generate_password(length: int = 16) -> str:
     return f"Generated a {length}-character password and copied it to the clipboard."
 
 
-TOOLS = [take_note, read_notes, open_notes, add_task, list_tasks, remove_task, set_reminder, get_timetable_block,
+TOOLS = [take_note, read_notes, open_notes, add_task, list_tasks, remove_task, clear_tasks, delete_notes, set_reminder, get_timetable_block,
          add_timetable_block, read_book_page, translate_text, make_acronym, create_folder, ask_wolfram_alpha,
          generate_password]

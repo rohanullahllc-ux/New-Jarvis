@@ -797,18 +797,68 @@ class RealSessionReviewTests(BrainCase):
         self.assertEqual(self.no_tool("make a todo list", answers=["done"]), "Okay, no tasks added.")
         self.assertEqual(self.no_tool("create a new to do list for tomorrow", answers=[""]), "Okay, no tasks added.")
 
-    def test_all_the_notes_can_be_cleared_after_a_yes(self):
+    def fill(self, folder, notes=0, tasks=()):
+        (Path(folder) / "Notes").mkdir()
+        for n in range(notes):
+            (Path(folder) / "Notes" / f"n{n}.txt").write_text(f"note {n} about python", encoding="utf-8")
+        (Path(folder) / "Tasks").mkdir()
+        for day, items in tasks:
+            (Path(folder) / "Tasks" / f"{day}-Task.txt").write_text("".join(i + "\n" for i in items), encoding="utf-8")
+
+    def test_notes_are_deleted_only_after_a_yes(self):
         from JarvisAdvancedBot.tools import _common
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
-            notes = Path(folder) / "Notes"
-            notes.mkdir()
-            for n in range(3):
-                (notes / f"n{n}.txt").write_text("x", encoding="utf-8")
-            self.assertIn("kept your notes", self.no_tool("clear all notes", answers=["no"]))
-            self.assertEqual(len(list(notes.glob("*.txt"))), 3)
-            self.assertEqual(self.no_tool("clear all notes", answers=["yes"]), "Deleted 3 notes, sir.")
-            self.assertEqual(list(notes.glob("*.txt")), [])
+            self.fill(folder, notes=3)
+            self.assertIn("kept them", self.no_tool("clear all notes", answers=["no"]))
+            self.assertEqual(self.questions, ["This will permanently delete 3 notes. Say yes or no."])
+            self.assertEqual(self.say("clear all notes", answers=["yes"]), "Deleted 3 notes, sir.")
+            self.assertEqual(self.calls, [("delete_notes", ("all",), {"confirmed": True})])
+
+    def test_clearing_notes_and_tasks_together_clears_every_day(self):
+        from JarvisAdvancedBot.tools import _common
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
+            self.fill(folder, notes=2, tasks=[("2026-10-19", ["a", "b"]), ("2026-10-20", ["c"])])
+            reply = self.say("clear all notes and tasks", answers=["yes"])
+            self.assertEqual(self.questions, ["This will permanently delete 2 notes and 3 to-do items. Say yes or no."])
+            self.assertEqual(reply, "Deleted 2 notes and 3 to-do items, sir.")
+            self.assertEqual(self.calls, [("delete_notes", ("all",), {"confirmed": True}), ("clear_tasks", ("", True, True), {})])
+
+    def test_clearing_one_days_list_leaves_the_other_days(self):
+        from JarvisAdvancedBot.tools import _common
+        today = L._day_from_word("today")
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
+            self.fill(folder, tasks=[(today, ["a", "b"]), ("2026-12-31", ["c"])])
+            self.say("clear my to do list", answers=["yes"])
+            self.assertEqual(self.calls, [("clear_tasks", ("", False, True), {})])
+            self.assertIn("2 to-do items", self.questions[0])
+
+    def test_there_is_nothing_to_confirm_when_there_is_nothing_to_clear(self):
+        from JarvisAdvancedBot.tools import _common
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
             self.assertIn("no saved notes", self.no_tool("delete my notes"))
+            self.assertIn("no to-do items", self.no_tool("clear all tasks"))
+            self.assertIn("no saved notes and no to-do items", self.no_tool("clear all notes and tasks"))
+        self.assertEqual(self.questions, [])
+
+    def test_one_task_can_be_removed_by_number_or_by_its_words(self):
+        self.routes("remove task 2", "remove_task", 2)
+        today = L._day_from_word("today")
+        self.routes("remove buy bread from my to do list", "remove_task", 0, "", "buy bread")
+        self.routes("delete the task buy bread", "remove_task", 0, "", "buy bread")
+        self.routes("mark call ali as done", "remove_task", 0, "", "call ali")
+        self.routes("cross off call ali", "remove_task", 0, "", "call ali")
+        self.routes("remove task 3 for tomorrow", "remove_task", 3, L._day_from_word("tomorrow"))
+        self.routes("remove 2 from my to do list", "remove_task", 2)
+        self.assertTrue(today)
+
+    def test_one_note_can_be_deleted_after_a_yes(self):
+        from JarvisAdvancedBot.tools import _common
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
+            self.fill(folder, notes=2)
+            self.assertIn("kept it", self.no_tool("delete the last note", answers=["no"]))
+            self.routes("delete the last note", "delete_notes", "latest", "", True, answers=["yes"])
+            self.assertIn("Several notes match", self.say("delete note about python"))          # both notes are about python
+            self.routes("delete note called n1", "delete_notes", "latest", "n1", True, answers=["yes"])
 
     def test_a_folder_can_be_opened_by_its_full_path(self):
         path = r"C:\Users\Rohaan & Co\Downloads\My Folder\Tasks"

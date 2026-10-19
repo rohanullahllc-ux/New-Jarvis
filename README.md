@@ -154,7 +154,7 @@ Phrases are matched loosely; these are examples. Two commands can go in one brea
 | Money and maths | "bitcoin price", "100 dollars in rupees", "what is 15 percent of 200", "convert 5 miles to kilometres" |
 | Chat and memory | "why is the sky blue", "I'm feeling tired, any advice", "remember that my brother is Ali", "what do you remember about me", "new chat" |
 | Knowledge | "who is Alan Turing", "tell me about the Roman Empire", "translate good morning to Urdu", "ask Wolfram integral of x squared" |
-| Your day | "remind me in 10 minutes to drink water", "add buy bread to my to-do list", "schedule dentist on Friday", "what's on my to-do list for tomorrow", "take a note that ...", "open my latest note", "add study from 6 to 9 in the morning to my time table", "what's on my time table", "read page 5 of the book story" |
+| Your day | "remind me in 10 minutes to drink water", "add buy bread to my to-do list", "schedule dentist on Friday", "what's on my to-do list for tomorrow", "make a to-do list" (asks task by task; "call Ali at 5 pm" also sets a reminder), "remove task 2", "remove buy bread from my to-do list", "cross off dentist", "clear my to-do list", "clear all notes and tasks" (asks yes or no first), "delete the last note", "take a note that ...", "open my latest note", "add study from 6 to 9 in the morning to my time table", "what's on my time table", "read page 5 of the book story" |
 | This PC | "battery", "how much RAM do I have", "disk space", "what is my IP address", "how is my PC doing", "take a screenshot", "where are my screenshots", "open the screenshot", "open Chrome", "close Chrome", "open drive D", "open downloads", "show desktop", "volume up", "mute", "next song", "play despacito" |
 | Power | "shut down the computer", "restart the computer", "put the computer to sleep" (each asks "are you sure?" first), "cancel the shutdown" |
 | Space | "NASA picture of the day", "Mars photos", "Perseverance photo", "tell me about Jupiter", "how far is the Moon", "asteroids this week", "where is the ISS", "next SpaceX launch", "how many Starlink satellites" |
@@ -171,7 +171,7 @@ gate.py                       password (salted hash) and the optional camera che
 transcript.py                 the private record of conversations (and python transcript.py to read it)
 MainCode.py                   one session: greet, then take commands until sleep or quit
 JarvisAdvancedBot/
-  tools/                      every ability, written once (61 tools), used by both brains
+  tools/                      every ability, written once (63 tools), used by both brains
   LocalBrain.py               the free brain: patterns -> tools. Order matters, see its header
   NLU.py                      the second chance: your own trained model for loosely worded commands
   ChatBrain.py                chat with a model on this PC (Ollama): streaming, memory, facts, lookups

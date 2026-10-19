@@ -5,6 +5,7 @@
 import datetime
 import json
 import logging
+import os
 import sys
 import time
 import unittest
@@ -488,6 +489,46 @@ class NotesAndTasksTests(ToolCase):
         self.assertEqual(T.remove_task(number=1), "Removed: Buy bread")
         self.assertIn("1. Call mum", T.list_tasks())
         self.fails(lambda: T.remove_task(number=5), "no item 5")
+
+    def test_a_task_can_be_removed_by_some_of_its_words_even_from_another_day(self):
+        T.add_task(task="Buy bread")
+        T.add_task(task="Call mum on the phone")
+        T.add_task(task="Dentist visit", date="2026-12-01")
+        self.assertEqual(T.remove_task(text="call mum"), "Removed: Call mum on the phone")
+        self.assertEqual(T.remove_task(text="denist"), "Removed: Dentist visit")               # a typo, found on another day
+        self.assertIn("1. Buy bread", T.list_tasks())
+        self.fails(lambda: T.remove_task(text="water the plants"), "can't find an item like 'water the plants'")
+        self.fails(lambda: T.remove_task(), "which item")
+        T.add_task(task="Call Ali")
+        T.add_task(task="Call Sana")
+        self.fails(lambda: T.remove_task(text="call"), "Several items match", "Which number")
+        self.assertFalse((self.db / "Tasks" / "2026-12-01-Task.txt").exists())                  # an emptied day leaves no file behind
+
+    def test_clearing_tasks_needs_a_yes_and_counts_what_goes(self):
+        T.add_task(task="a")
+        T.add_task(task="b")
+        T.add_task(task="c", date="2026-12-01")
+        self.fails(lambda: T.clear_tasks(), "permanently delete 2 to-do items", "confirmed")
+        self.assertEqual(T.list_tasks(), "To-do list for " + T.productivity.datetime.date.today().strftime("%A %d %B") + ": 1. a; 2. b")
+        self.assertEqual(T.clear_tasks(confirmed=True), "Cleared 2 to-do items.")
+        self.assertIn("c", T.list_tasks(date="2026-12-01"))               # the other day is untouched
+        self.assertEqual(T.clear_tasks(every_day=True, confirmed=True), "Cleared 1 to-do item.")
+        self.assertEqual(T.clear_tasks(every_day=True), "There were no to-do items to clear.")
+
+    def test_notes_are_deleted_only_when_confirmed_and_only_the_ones_meant(self):
+        notes = self.db / "Notes"
+        notes.mkdir()
+        for name, text, age in (("old", "buy milk", 100), ("mid", "python tonight", 200), ("new", "call the bank", 300)):
+            (notes / f"{name}.txt").write_text(text, encoding="utf-8")
+            os.utime(notes / f"{name}.txt", (time.time() - 1000 + age, time.time() - 1000 + age))
+        self.fails(lambda: T.delete_notes(), "permanently delete 3 notes", "confirmed")
+        self.assertEqual(len(list(notes.glob("*.txt"))), 3)
+        self.assertEqual(T.delete_notes(which="latest", confirmed=True), "Deleted 1 note.")
+        self.assertFalse((notes / "new.txt").exists())
+        self.assertEqual(T.delete_notes(title="python", confirmed=True), "Deleted 1 note.")
+        self.fails(lambda: T.delete_notes(title="zebra", confirmed=True), "can't find a note about 'zebra'")
+        self.assertEqual(T.delete_notes(confirmed=True), "Deleted 1 note.")
+        self.assertEqual(T.delete_notes(), "There are no saved notes to delete.")
 
     def test_tasks_belong_to_a_day(self):
         T.add_task(task="Dentist", date="2026-12-01")
