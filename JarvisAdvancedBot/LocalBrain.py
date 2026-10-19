@@ -240,6 +240,30 @@ def reminder(m, ask):
 
 
 TODO = r"(?:to ?do|to-do|todo|task)s?(?: list)?"
+FINISHED = re.compile(r"(?:done|finished|that'?s all|that is all|that'?s it|no more|nothing|nothing else|stop|no|nope|enough)")
+
+
+@intent(rf"^(?:make|create|start|build|prepare|set up|write)(?: me)?(?: a| my)?(?: new)? (?:to ?do|to-do|todo|task)s? list(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?(?:\b.*)?$")
+def make_todo_list(m, ask):
+    """Take the tasks one at a time. A task said with a time ("call Ali at 5 pm") also gets a reminder at that time."""
+    day = _day_from_word(m["day"] or "today")
+    added = []
+    question = "Okay sir. What is the first task? You can add a time, like: call Ali at 5 pm. Say done when you have finished."
+    while len(added) < 20:
+        answer = ask(question).strip()
+        spoken = normalize(answer)
+        if not spoken or FINISHED.fullmatch(spoken):
+            break
+        clock = _clock_time(spoken)
+        task = _as_typed(re.sub(r"\s+(?:at|for)\s+\d.*$", "", spoken).strip()) if clock else answer
+        T.add_task(task, day)
+        if clock:
+            T.set_reminder(message=task, at_time=clock)
+        added.append(f"{task} at {clock}" if clock else task)
+        question = "Added. Next task, or say done."
+    if not added:
+        return "Okay, no tasks added."
+    return f"Done sir. I added {len(added)} task{'' if len(added) == 1 else 's'}: " + "; ".join(added) + "."
 
 
 @intent(rf"^(?:add|put|write) (?P<task>.+?) (?:to|on|in|into) (?:my |the )?{TODO}$",
@@ -361,6 +385,20 @@ def forget_one_fact(m, ask):
 
 # ---------------------------------------------------------------- notes, password, jokes, screenshot
 
+@intent(r"^(?:clear|delete|erase|remove|wipe)(?: all)?(?: of)?(?: my| the)?(?: saved)? notes$")
+def clear_notes(m, ask):
+    from JarvisAdvancedBot.tools._common import folder
+    files = sorted(folder("Notes").glob("*.txt"))
+    if not files:
+        return "There are no saved notes to clear, sir."
+    count = f"{len(files)} note{'' if len(files) == 1 else 's'}"
+    if not _confirmed(ask, f"This will permanently delete {count}. Say yes or no."):
+        return "Okay, I've kept your notes."
+    for note in files:
+        note.unlink()
+    return f"Deleted {count}, sir."
+
+
 NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note|note (?:that|down))"
 
 
@@ -445,6 +483,13 @@ intent(r"\b(?:computer|pc|laptop|system)\b.*\b(?:sleep|hibernate|suspend)\b",
        r"\b(?:sleep|hibernate|suspend)\b.*\b(?:computer|pc|laptop)\b")(_power("sleep", "put to sleep"))
 
 PLACES = r"desktop|documents|downloads|pictures"
+
+
+@intent(r"^(?:open|show|go to|browse)(?: this| the)?(?: folder| file)?[:,]? (?P<path>[a-z]:[\\/].+)$")
+def open_a_path(m, ask):
+    path = _as_typed(m["path"]).strip().strip('"')
+    T.open_folder(path)
+    return f"Opening {path}, sir."
 
 
 @intent(r"^(?:open|show|go to|browse) (?:the |my )?(?:local )?(?:disk|drive) (?P<drive>[a-z])(?: drive)?$",
@@ -546,6 +591,13 @@ def _press(tool_name, *args):
 for tool_name, phrases in KEY_COMMANDS:
     for pattern, action in phrases:
         intent(pattern)(lambda m, ask, tool_name=tool_name, action=action: _press(tool_name, action))
+
+@intent(r"^play (?:some |a |any )?(?:music|songs?|something)$")
+def play_something(m, ask):
+    _press("media_control", "play_pause", 1)
+    return ("I pressed play, sir. If nothing started, no player had anything to resume. Tell me what to play, "
+            "for example: play despacito, and I'll find it on YouTube.")
+
 
 MEDIA_COMMANDS = [
     (r"^(?:pause|resume|play|stop|continue|unpause)(?: (?:the |this )?(?:music|song|video|it|playback|track))?$", "play_pause", 1),
@@ -910,7 +962,22 @@ def email(m, ask):
     return T.send_email(to, subject or "(no subject)", body, confirmed=True)
 
 
-@intent(r"\bwi-?fi\b.*\bpassword\b", r"\bpassword\b.*\bwi-?fi\b", r"\b(?:saved|known|stored|my) wi-?fi (?:networks|connections|names)\b")
+@intent(r"\b(?:available|nearby|around|in range|visible) wi-?fi(?: networks| connections| names)?\b",
+        r"\bwi-?fi (?:networks|connections|names) (?:available|nearby|around|in range)\b")
+def wifi_in_range(m, ask):
+    import subprocess
+    try:
+        shown = subprocess.run(["netsh", "wlan", "show", "networks"], capture_output=True, text=True, timeout=15).stdout
+    except (OSError, subprocess.SubprocessError):
+        shown = ""
+    names = list(dict.fromkeys(re.findall(r"^SSID \d+ : (.+)$", shown, flags=re.M)))
+    names = [name.strip() for name in names if name.strip()]
+    if not names:
+        return "I can't see any Wi-Fi networks right now, sir. The Wi-Fi may be off, or this PC has no Wi-Fi adapter."
+    return f"I can see {len(names)} Wi-Fi network{'' if len(names) == 1 else 's'}: " + ", ".join(names[:10]) + "."
+
+
+@intent(r"\bwi-?fi\b.*\bpas\w*", r"\bpas\w*\b.*\bwi-?fi\b", r"\b(?:saved|known|stored|my) wi-?fi (?:networks|connections|names)\b")
 def wifi(m, ask):
     found = re.search(r"\b(?:of|for)\s+(?:the |my )?(?:wi-?fi )?(?:network )?(?:named |called )?(.+?)(?: wi-?fi| network)?$", m.string)
     name = _as_typed(found.group(1)) if found else ""
@@ -929,6 +996,8 @@ def youtube_download(m, ask):
     url = link.group(0) if link else ask("Please paste the YouTube link.").strip()
     if not url:
         return "Okay, I won't download anything."
+    if not re.match(r"https?://", url):
+        return "That wasn't a YouTube link, so I've cancelled the download. Say it again when you have the link, sir."
     _heads_up("Downloading. This can take a minute.")
     return T.download_youtube_video(url, bool(re.search(r"\b(?:audio|song|music|mp3|sound)\b", m.string)))
 
@@ -1121,6 +1190,10 @@ def _by_the_language_model(text, ask):
     return LocalReply(command, ask, guessed=True)
 
 
+ANOTHER = re.compile(r"(?:^|\b)(?:another|one more)(?: one)?$")
+_last_fun = [""]                                        # the last joke, fact, advice, activity or dog request, for "another"
+
+
 def LocalReply(query, ask=lambda question: "", guessed=False):
     """Return the reply for a command, or None if it wasn't understood. ``guessed`` is set when the command is the language
     model's rewrite of what was said, so a rewrite that no pattern understands cannot be rewritten again."""
@@ -1129,12 +1202,16 @@ def LocalReply(query, ask=lambda question: "", guessed=False):
     if not text or EXPLANATION.match(text):
         return None                                      # (an explanation is for the chat brain, whatever words are in it)
     text = _canonical(text)
+    if ANOTHER.search(text) and _last_fun[0]:
+        text = _last_fun[0]                              # "another", "that's not funny, another one": the same kind again
     for pattern, handler in INTENTS:
         match = pattern.search(text)
         if not match:
             continue
         try:
             reply = handler(match, ask)
+            if reply is not None and handler in (joke, random_fact, bored, advice, dog):
+                _last_fun[0] = text
         except ToolError as e:
             return str(e)
         except Exception:

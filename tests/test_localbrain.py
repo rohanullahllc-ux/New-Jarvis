@@ -780,6 +780,74 @@ class FailureTests(BrainCase):
         self.assertIn("kaboom", errors.getvalue())
 
 
+class RealSessionReviewTests(BrainCase):
+    """Things that went wrong in a real morning session (2026-10-19) and are fixed."""
+
+    def test_a_to_do_list_is_built_task_by_task_and_timed_tasks_get_a_reminder(self):
+        today = L._day_from_word("today")
+        reply = self.say("Make a todo list for today, add timing to it and keep reminding me",
+                         answers=["buy bread", "call Ali at 5 pm", "done"])
+        self.assertEqual(self.calls, [("add_task", ("buy bread", today), {}), ("add_task", ("call ali", today), {}),
+                                      ("set_reminder", (), {"message": "call ali", "at_time": "17:00"})])
+        self.assertIn("added 2 tasks", reply)
+        self.assertIn("call ali at 17:00", reply)
+        self.assertIn("first task", self.questions[0])
+
+    def test_a_to_do_list_with_no_tasks_adds_nothing(self):
+        self.assertEqual(self.no_tool("make a todo list", answers=["done"]), "Okay, no tasks added.")
+        self.assertEqual(self.no_tool("create a new to do list for tomorrow", answers=[""]), "Okay, no tasks added.")
+
+    def test_all_the_notes_can_be_cleared_after_a_yes(self):
+        from JarvisAdvancedBot.tools import _common
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
+            notes = Path(folder) / "Notes"
+            notes.mkdir()
+            for n in range(3):
+                (notes / f"n{n}.txt").write_text("x", encoding="utf-8")
+            self.assertIn("kept your notes", self.no_tool("clear all notes", answers=["no"]))
+            self.assertEqual(len(list(notes.glob("*.txt"))), 3)
+            self.assertEqual(self.no_tool("clear all notes", answers=["yes"]), "Deleted 3 notes, sir.")
+            self.assertEqual(list(notes.glob("*.txt")), [])
+            self.assertIn("no saved notes", self.no_tool("delete my notes"))
+
+    def test_a_folder_can_be_opened_by_its_full_path(self):
+        path = r"C:\Users\Rohaan & Co\Downloads\My Folder\Tasks"
+        self.routes(f"Open this folder, {path}", "open_folder", path)
+        self.routes(f"open {path}", "open_folder", path)
+
+    def test_play_music_presses_play_and_says_how_to_name_a_song(self):
+        reply = self.routes("can you play music", "media_control", "play_pause", 1)
+        self.assertIn("play despacito", reply)
+
+    def test_another_repeats_the_last_joke_fact_or_advice(self):
+        L._last_fun[0] = ""
+        self.routes("tell me a joke", "get_joke")
+        self.routes("oh that's not funny another", "get_joke")
+        self.routes("another one", "get_joke")
+        self.routes("random fact", "get_random_fact", "any")
+        self.routes("one more", "get_random_fact", "any")
+
+    def test_another_with_nothing_to_repeat_is_not_guessed(self):
+        L._last_fun[0] = ""
+        self.assertIsNone(self.no_tool("another"))
+
+    def test_wifi_passwords_are_understood_even_with_a_typo(self):
+        self.routes("give me saved wifi passowrds", "get_saved_wifi_password", "", answers=[""])
+
+    def test_the_wifi_networks_in_range_are_listed(self):
+        shown = SimpleNamespace(stdout="SSID 1 : Basement\nBSSID 1 : aa\nSSID 2 : Home\nSSID 3 : Basement\n")
+        with mock.patch("subprocess.run", return_value=shown):
+            reply = self.no_tool("show all available wifi networks")
+        self.assertEqual(reply, "I can see 2 Wi-Fi networks: Basement, Home.")
+        with mock.patch("subprocess.run", return_value=SimpleNamespace(stdout="")):
+            self.assertIn("can't see any", self.no_tool("show all available wifi networks"))
+
+    def test_an_answer_that_is_not_a_link_cancels_the_download(self):
+        reply = self.no_tool("can you download a youtube video", answers=["can you give me a business name"])
+        self.assertIn("cancelled the download", reply)
+        self.assertNotIn("Downloading", " ".join(str(c) for c in self.spoken.call_args_list))
+
+
 class ExplanationTests(BrainCase):
     def test_a_question_about_the_difference_between_things_is_left_for_the_chat_brain(self):
         for phrase in ("what is the difference between a comet and an asteroid", "what's the difference between weather and climate",

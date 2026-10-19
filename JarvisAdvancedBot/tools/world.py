@@ -60,11 +60,25 @@ def get_random_fact(topic: Literal["any", "cat"] = "any") -> str:
                 return fact.strip()
         except ToolError:
             pass                                                     # the cat service is a decent plan B
-    fact = get_json("https://catfact.ninja/fact").get("fact")
+    try:
+        fact = get_json("https://catfact.ninja/fact").get("fact")
+    except ToolError:
+        return random.choice(OFFLINE_FACTS)                         # no internet: a fact that needs none
     if not fact:
         raise ToolError("The fact service sent an empty answer.")
     return fact.strip()
 
+
+OFFLINE_FACTS = (
+    "Honey never spoils; jars of it thousands of years old have been found in Egyptian tombs, still good to eat.",
+    "A day on Venus is longer than its year.",
+    "Octopuses have three hearts and blue blood.",
+    "Bananas are slightly radioactive because they contain potassium.",
+    "The Eiffel Tower grows about fifteen centimetres taller in summer, because heat expands the iron.",
+    "There are more possible games of chess than atoms in the observable universe.",
+    "Light from the Sun takes about eight minutes to reach the Earth.",
+    "Your body has enough iron in it to make a small nail.",
+)
 
 OFFLINE_ACTIVITIES = (
     ("Take a walk somewhere you have never been", "recreational", 1),

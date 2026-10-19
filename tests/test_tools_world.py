@@ -52,10 +52,10 @@ class IdeasAndFactsTests(ToolCase):
         self.assertEqual(T.get_random_fact(topic="cat"), "Cats purr.")
         self.assertEqual(len(self.http.calls), 1)
 
-    def test_random_fact_errors_when_everything_is_down(self):
+    def test_a_fact_is_still_told_when_everything_is_down(self):
         self.http.on("uselessfacts", FakeResponse({}, 500))
         self.http.on("catfact.ninja", FakeResponse({}, 500))
-        self.fails(lambda: T.get_random_fact(), "catfact.ninja")
+        self.assertIn(T.get_random_fact(), world.OFFLINE_FACTS)         # no internet: a fact that needs none
 
     def test_activity_suggestions_use_the_service_and_work_offline_too(self):
         self.http.on("bored-api", FakeResponse({"activity": "Organize your movie collection", "type": "busywork", "participants": 1}))

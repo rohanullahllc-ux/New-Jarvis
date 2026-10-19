@@ -468,6 +468,15 @@ class WindowTests(WindowCase):
         self.assertTrue(wait_for(lambda: "echo new chat" in self.chat()))
         self.assertNotIn("first topic", self.chat())
 
+    def test_saying_new_chat_clears_the_screen_like_the_button_does(self):
+        self.unlock()
+        self.window.input.setText("first topic")
+        self.window.send_button.click()
+        self.assertTrue(wait_for(lambda: "echo first topic" in self.chat()))
+        self.controller.said.emit("Fresh start, sir. I've cleared our conversation.")
+        self.assertTrue(wait_for(lambda: "Fresh start" in self.chat()))
+        self.assertNotIn("first topic", self.chat())
+
     def test_new_chat_does_nothing_while_locked(self):
         self.window.new_chat_button.click()                                # disabled, so this click is ignored
         self.assertFalse(self.controller.running)

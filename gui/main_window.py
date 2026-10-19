@@ -278,7 +278,7 @@ class MainWindow(QMainWindow):
     def _connect(self):
         c = self.controller
         c.state_changed.connect(self._on_state)
-        c.said.connect(lambda text: self._add("JARVIS", text, theme.ACCENT))
+        c.said.connect(self._said)
         c.said_more.connect(self._add_more)
         c.heard.connect(lambda text: self._add("YOU", text, theme.YOU))
         c.log.connect(self.log_view.appendPlainText)
@@ -350,6 +350,11 @@ class MainWindow(QMainWindow):
             self.music_button.setText("▶  Play theme")
 
     # ---- reacting to the session
+
+    def _said(self, text):
+        if text.startswith("Fresh start, sir. I've cleared"):        # "new chat" said or typed: clear the screen like the button
+            self.chat.clear()
+        self._add("JARVIS", text, theme.ACCENT)
 
     def _add(self, who, text, colour):
         stamp = QDateTime.currentDateTime().toString("HH:mm")
