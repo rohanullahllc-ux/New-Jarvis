@@ -256,7 +256,7 @@ class DispatcherTests(unittest.TestCase):
 
     def test_unknown_commands_get_an_honest_answer_that_helps(self):
         with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value=None),                 mock.patch("JarvisAdvancedBot.FreeBrain.available", return_value=False):
-            outcome, spoken, _, _ = self.handle("calculater please")
+            outcome, spoken, _, _ = self.handle("kalkulator please")
         self.assertIsNone(outcome)
         self.assertIn("didn't understand that as a command", spoken[0])
         self.assertIn("open calculator", spoken[0])

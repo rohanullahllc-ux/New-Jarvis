@@ -5,6 +5,8 @@ patterns, which decides what wins when two could match) without doing anything r
 """
 import datetime
 import io
+import os
+import time
 import sys
 import tempfile
 import unittest
@@ -845,8 +847,12 @@ class RealSessionReviewTests(BrainCase):
         today = L._day_from_word("today")
         self.routes("remove buy bread from my to do list", "remove_task", 0, "", "buy bread")
         self.routes("delete the task buy bread", "remove_task", 0, "", "buy bread")
-        self.routes("mark call ali as done", "remove_task", 0, "", "call ali")
-        self.routes("cross off call ali", "remove_task", 0, "", "call ali")
+        from JarvisAdvancedBot.tools import _common
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
+            (Path(folder) / "Tasks").mkdir()
+            (Path(folder) / "Tasks" / f"{today}-Task.txt").write_text("call ali" + chr(10), encoding="utf-8")
+            self.routes("mark call ali as done", "remove_task", 0, "", "call ali")        # a bare phrase acts only on a real item
+            self.routes("cross off call ali", "remove_task", 0, "", "call ali")
         self.routes("remove task 3 for tomorrow", "remove_task", 3, L._day_from_word("tomorrow"))
         self.routes("remove 2 from my to do list", "remove_task", 2)
         self.assertTrue(today)
@@ -856,7 +862,7 @@ class RealSessionReviewTests(BrainCase):
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
             self.fill(folder, notes=2)
             self.assertIn("kept it", self.no_tool("delete the last note", answers=["no"]))
-            self.routes("delete the last note", "delete_notes", "latest", "", True, answers=["yes"])
+            self.routes("delete the last note", "delete_notes", "latest", "n1", True, answers=["yes"])
             self.assertIn("Several notes match", self.say("delete note about python"))          # both notes are about python
             self.routes("delete note called n1", "delete_notes", "latest", "n1", True, answers=["yes"])
 
@@ -947,6 +953,117 @@ class RealSessionReviewTests(BrainCase):
         reply = self.no_tool("can you download a youtube video", answers=["can you give me a business name"])
         self.assertIn("cancelled the download", reply)
         self.assertNotIn("Downloading", " ".join(str(c) for c in self.spoken.call_args_list))
+
+
+class SlightlyDifferentWordingTests(BrainCase):
+    """The sentences from a real testing session that did nothing because the wording was a little different."""
+
+    def setUp(self):
+        super().setUp()
+        from JarvisAdvancedBot.tools import _common
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        patcher = mock.patch.object(_common, "DB", Path(folder.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.db = Path(folder.name)
+        (self.db / "Notes").mkdir()
+        (self.db / "Tasks").mkdir()
+        for n, age in enumerate((300, 200, 100)):                    # n0 is the oldest note, n2 the newest
+            note = self.db / "Notes" / f"n{n}.txt"
+            note.write_text(f"note {n}", encoding="utf-8")
+            os.utime(note, (time.time() - age, time.time() - age))
+        today = L._day_from_word("today")
+        (self.db / "Tasks" / f"{today}-Task.txt").write_text("finish program\ncall hamza\ndentist visit\n", encoding="utf-8")
+        self.today = today
+
+    def test_a_numbered_task_is_removed_however_it_is_asked_for(self):
+        for phrase in ("can you remove the third task i am done from the to do", "remove task 3", "delete task number three",
+                       "please get rid of the third item", "can you complete task three", "tick off the 3rd task"):
+            self.routes(phrase, "remove_task", 3)
+
+    def test_the_last_task_is_removed_even_when_speech_recognition_hears_another_word(self):
+        for phrase in ("remove the last task from the task folder", "delete the last tas", "can you remove the last text from the list",
+                       "can you remove the last test from the recent", "remove the latest item"):
+            self.routes(phrase, "remove_task", 3)
+        self.routes("remove the first task", "remove_task", 1)
+
+    def test_a_task_is_found_by_its_words_without_saying_task(self):
+        self.routes("cross off dentist", "remove_task", 0, "", "dentist")
+        self.routes("take hamza off my to do list", "remove_task", 0, "", "hamza")
+        self.assertIsNone(self.no_tool("cross off the moon"))                   # nothing like that on the list: not a command
+
+    def test_a_note_is_deleted_by_its_number_after_a_yes_even_when_heard_as_not_or_knot(self):
+        for phrase in ("remove not number 2", "can you remove the knot number 2", "delete note two", "erase the second note"):
+            self.routes(phrase, "delete_notes", "latest", "n1", True, answers=["yes"])               # the second newest
+        self.assertIn("no note number 7", self.no_tool("delete note number 7"))
+
+    def test_clear_all_with_nothing_else_asks_what_to_clear(self):
+        for phrase in ("can you clear all", "can you remove all", "can you delete all 9"):
+            self.say(phrase, answers=["notes", "yes"])
+            self.assertEqual(self.questions[0], "Do you want me to clear your notes, your tasks, or both?", phrase)
+            self.assertEqual(self.calls, [("delete_notes", ("all",), {"confirmed": True})], phrase)
+        self.say("clear all", answers=["both", "yes"])
+        self.assertEqual([c[0] for c in self.calls], ["delete_notes", "clear_tasks"])
+        self.assertEqual(self.no_tool("clear all", answers=["never mind"]), "Okay, I haven't cleared anything.")
+
+    def test_adding_another_item_asks_for_it(self):
+        self.routes("can you add another task", "add_task", "call sana", answers=["call sana"])
+        self.assertEqual(self.questions, ["What's the task?"])
+        self.routes("can you add another note", "take_note", "buy tea", answers=["buy tea"])
+
+    def test_a_yes_can_be_said_in_the_words_of_the_question(self):
+        for answer in ("you can you can permanently delete all 9", "delete them", "yes proceed", "clear everything", "go ahead"):
+            self.assertIn("Deleted 3 notes", self.say("clear all notes", answers=[answer]), answer)
+        for answer in ("no", "not right now", "wait", "don't", "never mind", "later"):
+            self.assertIn("kept them", self.no_tool("clear all notes", answers=[answer]), answer)
+
+    def test_typos_in_command_words_are_put_right(self):
+        shown = SimpleNamespace(stdout="SSID 1 : BASEMENT" + chr(10))
+        with mock.patch("subprocess.run", return_value=shown):
+            self.assertEqual(self.no_tool("show all available wifi networds"), "I can see 1 Wi-Fi network: BASEMENT.")
+        self.say("open task holder")
+        self.assertEqual(self.calls[0][0], "open_folder")
+
+    def test_numbers_in_a_list_refer_to_the_list_that_was_just_read_out(self):
+        self.say("what's on my to do list")
+        self.routes("remove number 2", "remove_task", 2)
+        self.say("show my notes")
+        self.routes("remove number 1", "delete_notes", "latest", "n2", True, answers=["yes"])
+
+
+class RewordedCommandTests(SlightlyDifferentWordingTests):
+    """More ways of saying the same things (the setUp gives it three notes and three tasks)."""
+
+    def test_deleting_the_last_note_is_not_reading_it_out(self):
+        self.routes("get rid of my last note", "delete_notes", "latest", "n2", True, answers=["yes"])
+        self.routes("throw away the newest note", "delete_notes", "latest", "n2", True, answers=["yes"])
+
+    def test_the_tasks_folder_is_opened_not_read_out(self):
+        for phrase in ("show me the tasks folder", "open the task folder", "go to my to do folder"):
+            self.say(phrase)
+            self.assertEqual(self.calls[0][0], "open_folder", phrase)
+
+    def test_jot_down_saves_a_note(self):
+        self.routes("jot down call mum", "take_note", "call mum")
+
+    def test_alarms_and_timers_said_in_words(self):
+        self.routes("set an alarm for seven in the morning", "set_reminder", message="Wake up, sir", at_time="07:00")
+        self.routes("set an alarm for 7 in the evening", "set_reminder", message="Wake up, sir", at_time="19:00")
+        self.routes("set a timer of five minutes", "set_reminder", message="Your timer is done", minutes_from_now=5)
+        self.routes("remind me after ten minutes to check the oven", "set_reminder", message="check the oven", minutes_from_now=10)
+
+    def test_sums_in_words(self):
+        self.assertEqual(self.no_tool("what is fifteen percent of two hundred"), "That's 30.")
+        self.assertEqual(self.no_tool("what is twelve times twelve"), "That's 144.")
+        self.assertEqual(self.no_tool("what is two hundred and fifty plus forty five"), "That's 295.")
+
+    def test_money_in_words(self):
+        self.routes("how much is a dollar in rupees", "convert_currency", 1, "USD", "PKR")
+        self.routes("how much is ten dollars in rupees", "convert_currency", 10.0, "USD", "PKR")
+
+    def test_asking_whether_the_laptop_is_plugged_in_is_asking_about_the_battery(self):
+        self.assertTrue(self.say("is the laptop plugged in"))
 
 
 class ExplanationTests(BrainCase):

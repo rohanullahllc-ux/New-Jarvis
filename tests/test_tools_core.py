@@ -455,7 +455,7 @@ class NotesAndTasksTests(ToolCase):
         self.assertEqual(T.take_note(text="milk, eggs", title="Shopping list!"), "Saved note 'Shopping list'")
         self.assertEqual(T.take_note(text="call the bank about the loan on Monday morning"), "Saved your note")
         listing = T.read_notes()
-        self.assertEqual(listing, "Your notes: call the bank about the loan on Monday morning; Shopping list: milk, eggs")
+        self.assertEqual(listing, "Your notes: 1. call the bank about the loan on Monday morning; 2. Shopping list: milk, eggs")
         self.assertNotIn("note-2026", listing)                                  # a short list is read in full, untitled notes as they are
         self.assertIn("milk, eggs", T.read_notes(title="shopping"))
         self.assertIn("Monday morning", T.read_notes(title="bank"))             # found by what it says, not just its title

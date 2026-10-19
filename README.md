@@ -119,6 +119,15 @@ python training/train_nlu.py --unmatched           things you said that no comma
   understood, e.g. `understood 'snap my display' as 'take a screenshot', 97% sure`, so you can see every guess in the log.
 * `LANGUAGE_MODEL=false` in `.env` turns it off; without `models/nlu.joblib` it does nothing at all.
 
+## When you word things a little differently
+
+Jarvis does not need your exact words. After the built-in patterns, he tries, in order: a reading of the request by its
+parts (action + thing + which one, so "can you remove the third task I am done from the to do", "delete the last tas" and
+"remove not number 2" for a note all work), a repair of typos and speech-recognition slips in command words ("networds",
+"holder"), number words as digits ("fifteen percent of two hundred", "a dollar in rupees"), and the language model you
+trained. Anything that deletes asks yes or no first, and if he still cannot tell what you mean he says he has changed
+nothing instead of pretending.
+
 ## Looking back at your conversations
 
 Jarvis keeps a private record of every session, one file a day in `Logs/conversations/`: what you said or typed, what he

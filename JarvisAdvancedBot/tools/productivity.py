@@ -86,8 +86,8 @@ def read_notes(title: str = "", latest: bool = False) -> str:
         return f"Your latest note: {_note_body(notes[0])[:2000]}"
     if not title:
         if len(notes) <= 3:                                     # a short list is read in full, not shortened to "and so on"
-            return "Your notes: " + "; ".join(_note_full(p) for p in notes)
-        return "Recent notes: " + ", ".join(_note_label(p) for p in notes[:10])
+            return "Your notes: " + "; ".join(f"{i}. {_note_full(p)}" for i, p in enumerate(notes, 1))
+        return "Recent notes: " + ", ".join(f"{i}. {_note_label(p)}" for i, p in enumerate(notes[:10], 1))
     wanted = title.lower()
     match = next((p for p in notes if wanted in p.stem.lower() or wanted in _note_body(p).lower()), None)
     if match is None:

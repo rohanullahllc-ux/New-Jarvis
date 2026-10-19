@@ -282,7 +282,7 @@ class SessionRecordTests(RecordCase):
             return MainCode.taskExe(listen=listen)
 
     def test_the_whole_conversation_is_recorded_with_what_answered_each_time(self):
-        outcome = self.run_session(["what time is it", "why is the sky blue", "calculater please", "new chat", "quit"],
+        outcome = self.run_session(["what time is it", "why is the sky blue", "frobnicate the widgets please", "new chat", "quit"],
                                    chat={"why is the sky blue": ["Because of scattering,", "which bends blue light."]})
         self.assertEqual(outcome, "quit")
         events = self.lines()

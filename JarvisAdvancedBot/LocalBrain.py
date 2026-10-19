@@ -22,7 +22,7 @@ import calc
 import config
 import units
 from config import DEFAULT_CITY, HOME_CURRENCY
-from JarvisAdvancedBot import ChatBrain, FreeBrain, NLU
+from JarvisAdvancedBot import ChatBrain, FreeBrain, Frames, NLU
 from JarvisAdvancedBot import tools as T
 from JarvisAdvancedBot.tools._common import read_clipboard
 from JarvisAdvancedBot.tools.productivity import LANGUAGES
@@ -78,8 +78,10 @@ def _heads_up(text):
     Speak(text)
 
 
-YES = re.compile(r"\b(?:yes|yeah|yep|yup|sure|ok|okay|confirm|confirmed|go ahead|do it|send it|proceed|affirmative)\b")
-NO = re.compile(r"\b(?:no|nope|nah|don't|do not|cancel|stop|never|negative|abort)\b")
+YES = re.compile(r"\b(?:yes|yeah|yep|yup|sure|ok|okay|confirm|confirmed|go ahead|do it|do that|send it|proceed|affirmative|"
+                 r"absolutely|definitely|certainly|of course|continue|correct|exactly|alright|please|delete|clear|erase|remove|"
+                 r"wipe|lock|forget|permanently|everything)\b")
+NO = re.compile(r"\b(?:no|nope|nah|don't|dont|do not|not|cancel|stop|never|negative|abort|wait|later|hold on|nothing|none)\b")
 
 
 def _confirmed(ask, question):
@@ -115,7 +117,7 @@ def _sentences(text, count=2):
 
 # ---------------------------------------------------------------- small talk
 
-@intent(r"^(?:hi|hello|hey|hello there|good (?:morning|afternoon|evening)|assalam ?o? ?alaikum|salam)$")
+@intent(r"^(?:hi|hello|hey|hello there|good (?:morning|afternoon|evening)|assalam ?o? ?alaikum|salam|jar|jarvis)$")
 def greet(m, ask):
     return random.choice(["Hello sir, how can I help?", "At your service, sir.", "Hello sir. What can I do for you?"])
 
@@ -183,7 +185,7 @@ def date_today(m, ask):
 def _duration_minutes(text):
     if re.search(r"\bhalf an? hour\b", text):
         return 30
-    found = re.search(rf"\b(?:in|for|after) {NUM} ?(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b", text)
+    found = re.search(rf"\b(?:in|for|after|of) {NUM} ?(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b", text)
     if not found:
         return None
     amount, unit = _number(found.group(1)), found.group(2)
@@ -198,6 +200,9 @@ def _clock_time(text):
     hour, minute, half = int(found.group(1)), int(found.group(2) or 0), found.group(3)
     if hour > 23 or minute > 59:
         return None
+    part = re.search(r"\b(morning|afternoon|evening|night|tonight)\b", text)
+    if not half and part and 1 <= hour <= 12:
+        half = "a" if part.group(1) == "morning" else "p"        # "at 7 in the morning"
     if half == "p" and hour < 12:
         hour += 12
     elif half == "a" and hour == 12:
@@ -224,7 +229,7 @@ def _reminder_message(text):
 
 @intent(r"\b(?:remind me|reminder|alarm|timer|wake me up)\b")
 def reminder(m, ask):
-    text = m.string
+    text = Frames.numerals(m.string)                     # "set an alarm for seven in the morning" -> "... for 7 in the morning"
     message = _reminder_message(text)
     minutes, clock = _duration_minutes(text), _clock_time(text)
     if not minutes and not clock:
@@ -294,22 +299,13 @@ def schedule_task(m, ask):
     return T.add_task(_as_typed(m["task"].strip()), _day_from_word(m["day"] or "")) + "."
 
 
-@intent(rf"\b(?:what(?:'s| is)(?: on)?|show|read|list|tell me|check)\b.*\b{TODO}\b",
+@intent(rf"^(?!.*\b(?:folder|directory)\b).*\b(?:what(?:'s| is)(?: on)?|show|read|list|tell me|check)\b.*\b{TODO}\b",
         rf"^(?:my )?{TODO}(?: for (?:today|tomorrow))?$", r"\bwhat do i have to do\b",
         r"\bwhat\b.*\b(?:tasks?|work)\b.*\b(?:scheduled|planned|due|pending)\b")
 def list_tasks(m, ask):
+    _last_listed[0] = "task"
     day = re.search(r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", m.string)
     return T.list_tasks(_day_from_word(day.group(1))) if day else T.list_tasks()
-
-
-@intent(r"\b(?:remove|delete|cross off|tick off|complete|completed|finish|finished|done with|mark)\b"
-        r".*?\b(?:task|item|number)\s+(\S+)")
-def remove_task(m, ask):
-    number = _number(m.group(1))
-    if not number:
-        return None
-    day = DAY_WORDS.search(m.string)
-    return (T.remove_task(int(number), _day_from_word(day.group(1))) if day else T.remove_task(int(number))) + "."
 
 
 # ---------------------------------------------------------------- time table (the user's own routine)
@@ -401,12 +397,14 @@ TASKS_WORD = r"(?:tasks|task list|to ?do list|to-do list|todo list|to ?dos|todos
 @intent(rf"^(?:clear|delete|erase|remove|wipe|empty)(?P<every> all| every| everything)?(?: of)?(?: my| the)?(?: saved)? "
         rf"(?P<what>notes and (?:the )?{TASKS_WORD}|{TASKS_WORD} and notes|notes|{TASKS_WORD})(?: for (?P<day>{WEEKDAY_WORDS}))?$")
 def clear_data(m, ask):
+    what = m["what"]
+    return _clear(ask, "note" in what, bool(re.search(r"task|to ?do|to-do", what)), bool(m["every"]) or ("note" in what and bool(re.search(r"task|to ?do|to-do", what))),
+                  _day_from_word(m["day"]) if m["day"] else "")
+
+
+def _clear(ask, notes, tasks, every_day, day):
     """Delete notes and/or to-do items after a yes. "All" (or both kinds at once) means every day's list; a day named means that day."""
     from JarvisAdvancedBot.tools import productivity
-    what = m["what"]
-    notes, tasks = "note" in what, bool(re.search(r"task|to ?do|to-do", what))
-    every_day = bool(m["every"]) or (notes and tasks)
-    day = _day_from_word(m["day"]) if m["day"] else ""
     if day:
         every_day = False
     note_count = len(productivity.pick_notes("all")) if notes else 0
@@ -430,28 +428,129 @@ def clear_data(m, ask):
         rf"^(?:remove|delete|erase|drop|scratch)(?: the| my)? (?:task|item) (?P<what>.+?)(?: for (?P<day>{WEEKDAY_WORDS}))?$",
         rf"^(?:cross off|tick off|check off) (?:the )?(?:task |item )?(?P<what>.+?)(?: for (?P<day>{WEEKDAY_WORDS}))?$")
 def remove_task_by_words(m, ask):
+    frame = Frames.parse(m.string)
+    if frame and frame.which in ("number", "last", "first", "all"):
+        return _by_frame(m.string, ask)                    # "the third task i am done" is task number 3, not words to look for
     what, day = m["what"].strip(), (_day_from_word(m["day"]) if m["day"] else "")
     number = _number(what)
     if number:
         return (T.remove_task(int(number), day) if day else T.remove_task(int(number))) + "."
+    if not re.search(r"\b(?:list|task|tasks|item|to ?do|todo)\b", m.string):     # a bare "cross off dentist": only if it is on the list
+        return _by_frame(m.string, ask)
     return T.remove_task(0, day, _as_typed(what)) + "."
 
 
 @intent(rf"^(?:delete|remove|erase)(?: the| my)? (?P<which>last|latest|newest|recent) note$",
         r"^(?:delete|remove|erase)(?: the| my)? note(?: called| named| about| titled| with| saying)? (?P<title>.+)$")
 def delete_one_note(m, ask):
+    frame = Frames.parse(m.string)
+    if frame and frame.which in ("number", "last", "first"):
+        return _delete_note(ask, which=frame.which, number=frame.number)       # "delete note two", "delete note number 7"
+    return _delete_note(ask, title=(m.groupdict().get("title") or "").strip())
+
+
+def _delete_note(ask, which="last", number=0, title=""):
+    """Delete one note (the newest, the oldest, the Nth newest, or the one a few words point to) after a yes."""
     from JarvisAdvancedBot.tools import productivity
-    title = (m.groupdict().get("title") or "").strip()
-    chosen = productivity.pick_notes("latest", _as_typed(title))
+    notes = productivity.pick_notes("all")                 # oldest first
+    if title:
+        chosen = productivity.pick_notes("latest", _as_typed(title))
+    elif number:
+        if not 1 <= number <= len(notes):
+            return f"There is no note number {number}; you have {len(notes)}."
+        chosen = [notes[-number]]                          # note 1 is the newest, as in "Recent notes"
+    else:
+        chosen = notes[:1] if which == "first" else notes[-1:]
     if not chosen:
         return "There are no saved notes to delete, sir."
     if not _confirmed(ask, f"This will permanently delete the note {chosen[0].stem}. Say yes or no."):
         return "Okay, I've kept it."
-    T.delete_notes("latest", _as_typed(title), True)
+    T.delete_notes("latest", chosen[0].stem, True)
     return "Deleted that note, sir."
 
 
+def _clear_what(ask):
+    answer = normalize(ask("Do you want me to clear your notes, your tasks, or both?"))
+    both = bool(re.search(r"\b(?:both|all|everything|each)\b", answer))
+    notes, tasks = both or bool(re.search(r"\bnotes?\b|\bnot\b|\bknot\b", answer)), both or bool(re.search(r"task|to ?do|list", answer))
+    if not (notes or tasks):
+        return "Okay, I haven't cleared anything."
+    return _clear(ask, notes, tasks, True, "")
+
+
+_last_listed = ["task"]                                    # what was last read out, for "remove number 2"
+
+
+def _by_frame(text, ask):
+    """Add or remove something from the to-do list or the notes when the request can be understood by its parts."""
+    from JarvisAdvancedBot.tools import productivity
+    frame = Frames.parse(text)
+    if frame is None:
+        return None
+    nouns, day = set(frame.nouns), (_day_from_word(frame.day) if frame.day else "")
+    if frame.action == "add":
+        if len(nouns) != 1:
+            return None
+        noun = next(iter(nouns))
+        item = frame.text or ask("What's the task?" if noun == "task" else "What should the note say?").strip()
+        if not item:
+            return "Okay, nothing added."
+        return ((T.add_task(item, day) if day else T.add_task(item)) if noun == "task" else T.take_note(item)) + "."
+    if not nouns:
+        if frame.which == "all":
+            return _clear_what(ask)
+        if frame.which == "text":                          # a few words and no noun: only if one of the tasks has them
+            when = datetime.date.fromisoformat(day) if day else datetime.date.today()
+            try:
+                productivity._find_task(frame.text, when, productivity._read_tasks(when), not day)
+            except ToolError:
+                return None
+            return T.remove_task(0, day, _as_typed(frame.text)) + "."
+        nouns = {_last_listed[0]}
+    if frame.which in ("all", "list"):
+        return _clear(ask, "note" in nouns, "task" in nouns, frame.which == "all" or "note" in nouns and "task" in nouns, day)
+    if len(nouns) > 1:
+        return None
+    if "note" in nouns:
+        if frame.which == "text":
+            return _delete_note(ask, title=frame.text)
+        return _delete_note(ask, which=frame.which, number=frame.number)
+    when = datetime.date.fromisoformat(day) if day else datetime.date.today()
+    if frame.which in ("last", "first"):
+        count = productivity.count_tasks(when)
+        if not count:
+            return f"The to-do list for {when:%A %d %B} is empty, sir."
+        number = count if frame.which == "last" else 1
+    elif frame.which == "number":
+        number = frame.number
+    else:
+        return (T.remove_task(0, day, _as_typed(frame.text)) if day else T.remove_task(0, "", _as_typed(frame.text))) + "."
+    return (T.remove_task(number, day) if day else T.remove_task(number)) + "."
+
+
+def _by_repair(text, ask):
+    """A second look at a sentence no pattern understood, with typos and speech-recognition slips in its command words put right."""
+    fixed = Frames.repair(text, _command_words()) or text
+    converted = Frames.numerals(fixed)                   # "how much is a dollar in rupees" -> "how much is 1 dollar in rupees"
+    return LocalReply(converted, ask) if converted != text else None
+
+
+_vocabulary = []
+
+
+def _command_words():
+    if not _vocabulary:
+        words = set(re.findall(r"[a-z]{4,}", " ".join(EXAMPLES + [family.command for family in NLU.FAMILIES.values()])))
+        _vocabulary.extend(sorted(words))
+    return _vocabulary
+
+
 NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note|note (?:that|down))"
+
+
+@intent(r"^jot(?: down)?[:,]? (?P<text>(?!a task\b).+)$")
+def jot_note(m, ask):
+    return T.take_note(_as_typed(m["text"].strip())) + "."
 
 
 @intent(NOTE_START)
@@ -471,6 +570,7 @@ def open_the_notes(m, ask):
 @intent(r"\b(?:read|show|list|open|see|check|view|what are|what is in|what's in|do i have)(?: me)?(?: all)? (?:my |the |any )?(?:last |latest |recent |saved )?notes?\b",
         r"\bwhat notes\b", r"\b(?:last|latest|recent) note\b")
 def read_notes(m, ask):
+    _last_listed[0] = "note"
     if re.search(r"\b(?:last|latest|newest|recent) note\b", m.string):
         return T.read_notes("", True)
     title = re.sub(r".*?\bnotes?\b(?: (?:about|called|named|on))?\s*", "", m.string, count=1).strip()
@@ -552,7 +652,7 @@ intent(r"\b(?:computer|pc|laptop|system)\b.*\b(?:sleep|hibernate|suspend)\b",
 PLACES = r"desktop|documents|downloads|pictures"
 
 
-@intent(r"^(?:open|show|go to|browse)(?: the| my)? (?:tasks?|to ?do) (?:folder|holder|fol?der|directory)$")
+@intent(r"^(?:open|show|go to|browse)(?: me)?(?: the| my)? (?:tasks?|to ?do) (?:folder|holder|fol?der|directory)$")
 def open_tasks_folder(m, ask):
     from JarvisAdvancedBot.tools._common import folder
     T.open_folder(str(folder("Tasks")))
@@ -867,14 +967,14 @@ PC_TOPICS = [
 ]
 
 
-@intent(r"\b(?:battery|cpu|processor|ram|memory usage|disk space|storage|drives|system (?:status|info|information|details)"
+@intent(r"\b(?:battery|plugged in|charging|charger|cpu|processor|ram|memory usage|disk space|storage|drives|system (?:status|info|information|details)"
         r"|pc status|computer status|uptime|ip address|network status|internet connection|am i connected"
         r"|windows version|operating system|computer name|specs|specifications"
         r"|(?:status|health|state|condition) of (?:my |the )?(?:pc|computer|laptop|system)"
         r"|how(?:'s| is) (?:my |the )?(?:pc|computer|laptop)(?: doing| running)?)\b")
 def pc_info(m, ask):
     battery = psutil.sensors_battery()
-    if "battery" in m.string and battery:
+    if re.search(r"battery|plugged in|charging|charger", m.string) and battery:
         state = "charging" if battery.power_plugged else "not charging"
         return f"The battery is at {battery.percent:.0f} percent and {state}."
     topic = next((name for pattern, name in PC_TOPICS if re.search(pattern, m.string)), None)
@@ -1302,6 +1402,7 @@ def _by_the_language_model(text, ask):
     return LocalReply(command, ask, guessed=True)
 
 
+MATH_TALK = re.compile(r"\b(?:percent|times|plus|minus|divided|multiplied|squared|cubed|root of|power of)\b")
 ANOTHER = re.compile(r"(?:^|\b)(?:another|one more)(?: one)?$")
 _last_fun = [""]                                        # the last joke, fact, advice, activity or dog request, for "another"
 
@@ -1314,6 +1415,17 @@ def LocalReply(query, ask=lambda question: "", guessed=False):
     if not text or EXPLANATION.match(text):
         return None                                      # (an explanation is for the chat brain, whatever words are in it)
     text = _canonical(text)
+    if MATH_TALK.search(text):
+        text = Frames.numerals(text)                     # "fifteen percent of two hundred" -> "15 percent of 200"
+    if not guessed:
+        frame = Frames.parse(text)
+        if frame and frame.action == "remove" and frame.nouns:           # before the patterns, which would read "get rid of my last note" aloud
+            try:
+                reply = _by_frame(text, ask)
+            except ToolError as error:
+                return str(error)
+            if reply is not None:
+                return reply
     if ANOTHER.search(text) and _last_fun[0]:
         text = _last_fun[0]                              # "another", "that's not funny, another one": the same kind again
     for pattern, handler in INTENTS:
@@ -1331,4 +1443,9 @@ def LocalReply(query, ask=lambda question: "", guessed=False):
             return "Sorry sir, that didn't work. The details are in the window."
         if reply is not None:
             return reply
-    return None if guessed else _by_the_language_model(text, ask)
+    if guessed:
+        return None
+    try:
+        return _by_frame(text, ask) or _by_repair(text, ask) or _by_the_language_model(text, ask)
+    except ToolError as error:
+        return str(error)
