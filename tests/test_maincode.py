@@ -31,6 +31,20 @@ def setUpModule():
     unittest.addModuleCleanup(patcher.stop)
 
 
+class QuitCommandTests(unittest.TestCase):
+    def test_every_way_of_asking_jarvis_to_quit_is_understood(self):
+        from JarvisAdvancedBot.LocalBrain import normalize
+        for phrase in ("quit", "exit", "exit exit the program", "can you quit jar", "please exit the application", "close the program",
+                       "quit jarvis", "stop the program", "shut down yourself", "bye", "ok goodbye jarvis"):
+            polite = normalize(phrase)
+            self.assertTrue(MainCode.STOP_COMMAND.fullmatch(phrase.lower().replace("jarvis", "").strip())
+                            or MainCode.STOP_COMMAND.fullmatch(polite), phrase)
+
+    def test_closing_other_things_is_not_quitting_jarvis(self):
+        for phrase in ("close chrome", "close notepad", "stop the music", "turn off the sound", "shut down the computer"):
+            self.assertFalse(MainCode.STOP_COMMAND.fullmatch(phrase), phrase)
+
+
 class GreetingTests(unittest.TestCase):
     def test_it_is_one_sentence_with_the_part_of_the_day_the_date_and_the_time(self):
         with mock.patch.object(MainCode, "USER_NAME", "Mr Khan"):

@@ -21,7 +21,9 @@ PERSONAL_DATA = re.compile(r"(?=.*\b(?:my|today'?s|tomorrow'?s|today|tomorrow|to
                            r"(?=.*\b(?:to[- ]?do|todo|tasks?|schedule[ds]?|reminders?|time ?table|appointments?|calendar|list)\b)", re.I)
 SLEEP_COMMAND = re.compile(r"(?:you can )?(?:go to |take (?:a )?)?(?:sleep|rest)(?: mode)?(?: now)?")
 GREETING_LEAD = re.compile(r"(?:hello|hi|hey|ok|okay|alright|please)[ ,]+(?=\S)")
-STOP_COMMAND = re.compile(r"(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?")
+STOP_COMMAND = re.compile(r"(?:(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?(?: exit)?"
+                          r"(?: (?:the |this |your )?(?:program|application|app|jar|jarvis|yourself|assistant)(?: application)?)?"
+                          r"|(?:close|stop|end|shut down|turn off)(?: exit)? (?:the |this |your )?(?:program|application|jar|yourself|jarvis application))")
 RESET_COMMAND = re.compile(r"(?:start (?:a )?)?(?:new|fresh) (?:chat|conversation)|start over|forget everything|"
                            r"(?:clear|reset|delete|wipe|erase)(?: out)? (?:your |the |this |our |my )?(?:memory|chat|conversation|history)")
 
@@ -75,7 +77,7 @@ def _handle_one(query, ask):
     if len(query) < 3:
         return None
     transcript.source("command")                        # the paths below change this to say what really answered
-    if STOP_COMMAND.fullmatch(command):
+    if STOP_COMMAND.fullmatch(command) or STOP_COMMAND.fullmatch(polite):
         Speak("Goodbye, sir.")
         return "quit"
     if SLEEP_COMMAND.fullmatch(command) or SLEEP_COMMAND.fullmatch(polite):
