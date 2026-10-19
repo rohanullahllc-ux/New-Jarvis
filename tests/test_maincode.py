@@ -18,12 +18,13 @@ import MainCode  # noqa: E402
 import transcript  # noqa: E402
 from anthropic.lib.tools import ToolError  # noqa: E402
 from JarvisAdvancedBot import tools as T  # noqa: E402
-from tests.isolation import no_language_model  # noqa: E402
+from tests.isolation import no_language_model, no_windows_audio  # noqa: E402
 
 
 def setUpModule():
     """Sessions write a conversation record; in these tests it goes to a temporary folder, never to the real Logs folder."""
     no_language_model()
+    no_windows_audio()
     folder = tempfile.TemporaryDirectory()
     unittest.addModuleCleanup(folder.cleanup)
     patcher = mock.patch.object(transcript, "LOG_DIR", Path(folder.name))
@@ -207,16 +208,27 @@ class CommandLoopTests(SessionCase):
         self.assertTrue(thread.call_args.kwargs["daemon"])
         thread.return_value.start.assert_called_once()
 
+    def test_a_muted_or_quiet_windows_microphone_is_put_right_in_the_background_before_the_first_listen(self):
+        for mode, checked in (("voice", 1), ("text", 0)):
+            with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch("microphone.check_windows_volume") as check, \
+                    mock.patch.object(MainCode, "INPUT_MODE", mode), mock.patch.object(MainCode, "CHAT_PRELOAD", False), \
+                    mock.patch("JarvisAdvancedBot.NLU.warm_up"):
+                MainCode._prewarm()
+                check.assert_not_called()                                # only the background job does it
+                thread.call_args.kwargs["target"]()
+            self.assertEqual(check.call_count, checked, mode)            # (typed input never looks at the microphone)
+
     def test_the_chat_model_is_only_loaded_ahead_of_time_when_the_setting_says_so(self):
         for setting, loaded in ((False, 0), (True, 1)):
             with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch.object(MainCode, "CHAT_PRELOAD", setting), \
-                    mock.patch("JarvisAdvancedBot.ChatBrain.warm_up") as warm_up:
+                    mock.patch("microphone.check_windows_volume"), mock.patch("JarvisAdvancedBot.ChatBrain.warm_up") as warm_up:
                 MainCode._prewarm()
                 thread.call_args.kwargs["target"]()                      # run the background job now
             self.assertEqual(warm_up.call_count, loaded, setting)
 
     def test_the_language_model_is_loaded_in_the_background_while_the_greeting_is_spoken(self):
-        with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch("JarvisAdvancedBot.NLU.warm_up") as warm_up:
+        with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch("microphone.check_windows_volume"), \
+                mock.patch("JarvisAdvancedBot.NLU.warm_up") as warm_up:
             MainCode._prewarm()
             warm_up.assert_not_called()                                  # only the background job loads it
             thread.call_args.kwargs["target"]()

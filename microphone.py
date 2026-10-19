@@ -25,7 +25,7 @@ import speech_recognition as sr
 
 import speech
 import winmm_mic
-from config import INPUT_MODE, MIC_BACKEND, MIC_BEEP, MIC_DEVICE, MIC_PAUSE, SPEECH_LANGUAGE, SPEECH_LANGUAGE_FALLBACK
+from config import INPUT_MODE, MIC_BACKEND, MIC_BEEP, MIC_DEVICE, MIC_PAUSE, MIC_VOLUME, SPEECH_LANGUAGE, SPEECH_LANGUAGE_FALLBACK
 from winmm_mic import MicrophoneError, WinMMMicrophone
 
 READ_TIMEOUT = 5       # seconds without audio before a backend is declared dead
@@ -39,6 +39,7 @@ CONTINUE_WAIT = 4.0    # after a sentence that sounds unfinished, how long to wa
 MAX_CONTINUATIONS = 2
 IDLE_RELEASE = 45      # seconds without listening before the microphone is released (so Windows' microphone light goes off)
 RECALIBRATE_EVERY = 600
+VOLUME_WAIT = 10       # the first listen waits at most this long for the Windows microphone volume to be put right
 
 
 # ---------------------------------------------------------------- sounddevice backend
@@ -420,6 +421,8 @@ def _ensure_ready():
     if _recognizer is not None:
         return True
     print(": Starting the microphone, stay quiet for a second...")
+    check_windows_volume()                          # (nothing new when the program's start-up has begun it already)
+    _volume_done.wait(VOLUME_WAIT)                  # the room is measured at the volume it will be heard at
     recognizer = sr.Recognizer()
     recognizer.pause_threshold = MIC_PAUSE          # a pause to think is not the end of the sentence (it was 1 s, and cut some off)
     recognizer.non_speaking_duration = min(0.6, MIC_PAUSE)     # a little silence is kept either side of the words
@@ -433,7 +436,6 @@ def _ensure_ready():
             _calibration.update(at=time.monotonic(), base=recognizer.energy_threshold, misses=0)
             _clamp_threshold()
             print(f": Microphone ready [{mic_status()}]. Say a wake word like 'hey jarvis'.")
-            _check_windows_volume()
             return True
         except (MicrophoneError, OSError) as e:
             print(f": Microphone problem: {e}")
@@ -444,26 +446,56 @@ def _ensure_ready():
 
 
 _volume_checked = [False]
+_volume_done = threading.Event()              # set while no check of the Windows microphone volume is running
+_volume_done.set()
 
 
-def _check_windows_volume():
-    """Once per run, in the background: tell the user if Windows has the microphone muted or turned down low, which is the usual
-    reason a voice assistant misses words."""
+def _put_right(audio_levels, volume, muted):
+    """Switch the Windows microphone on and raise it to MIC_VOLUME when it is muted or under LOW_VOLUME percent (a louder one
+    is left as it is). Returns the volume and mute state afterwards."""
+    too_quiet = volume < min(audio_levels.LOW_VOLUME, MIC_VOLUME)
+    if not (muted or too_quiet):
+        return volume, muted
+    was = " and ".join((["muted"] if muted else []) + ([f"only at {volume} percent"] if too_quiet else []))
+    did = []
+    try:
+        if muted:
+            audio_levels.set_muted(False)
+            muted = False
+            did.append("switched it on")
+        if too_quiet:
+            volume = audio_levels.set_volume(MIC_VOLUME)
+            did.append(f"set it to {volume} percent")
+    except audio_levels.AudioError:
+        pass                                      # what could not be done is reported by the advice that follows
+    if did:
+        print(f": The Windows microphone was {was}, so I {' and '.join(did)}. (MIC_VOLUME in .env; 0 leaves Windows alone.)")
+    return volume, muted
+
+
+def check_windows_volume():
+    """Once per run, in the background: put right a Windows microphone that is muted or turned down low (MIC_VOLUME; 0 only
+    warns), which is the usual reason a voice assistant misses words or hears half a sentence. The first listen waits for it."""
     if _volume_checked[0]:
         return
     _volume_checked[0] = True
+    _volume_done.clear()
 
     def look():
         global last_note
         try:
             import audio_levels
             volume, muted = audio_levels.state()
-        except Exception:                            # noqa: BLE001 - this is only advice; Jarvis works without it
-            return
-        advice = audio_levels.advice(volume, muted)
-        if advice:
-            print(f": {advice}")
-            last_note = last_note or advice
+            if MIC_VOLUME:
+                volume, muted = _put_right(audio_levels, volume, muted)
+            advice = audio_levels.advice(volume, muted)
+            if advice:
+                print(f": {advice}")
+                last_note = last_note or advice
+        except Exception:                            # noqa: BLE001 - this is only help; Jarvis works without it
+            pass
+        finally:
+            _volume_done.set()
 
     threading.Thread(target=look, name="mic-volume-check", daemon=True).start()
 
@@ -799,7 +831,7 @@ def diagnose(only_backend=None, speak_test=True):
         advice = audio_levels.advice(volume, muted)
         line("WARN" if advice else "OK", f"input volume {volume} percent, {'MUTED' if muted else 'not muted'}")
         if advice:
-            problems.append(advice)
+            problems.append(advice + " To fix it now, run:  python audio_levels.py --mic 80")
     except Exception as e:                           # noqa: BLE001
         line("INFO", f"could not read the Windows microphone volume ({e})")
 

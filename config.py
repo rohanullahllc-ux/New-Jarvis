@@ -67,6 +67,7 @@ MIC_BACKEND = key("MIC_BACKEND", "auto").lower()    # auto | sounddevice | winmm
 MIC_DEVICE = key("MIC_DEVICE")                      # blank = Windows default; or part of a device name, or an index
 MIC_PAUSE = max(0.5, decimal("MIC_PAUSE", 1.3))     # seconds of silence that end what you are saying (longer = fewer cut-off sentences)
 MIC_BEEP = flag("MIC_BEEP", True)                   # a short beep when the microphone has just been opened: "speak now"
+MIC_VOLUME = min(100, max(0, number("MIC_VOLUME", 80)))   # muted, or under 50 percent in Windows at start-up: Jarvis sets it to this many percent (0 = never touch it)
 SPEECH_LANGUAGE = key("SPEECH_LANGUAGE", "en-pk")   # what Google's speech recognition expects you to speak (en-pk, en-in, en-us, en-gb...)
 SPEECH_LANGUAGE_FALLBACK = key("SPEECH_LANGUAGE_FALLBACK", "en-us")     # tried once when the first language understood nothing
 TTS_ENABLED = flag("TTS_ENABLED", True)             # false = Jarvis answers in text only (much faster)

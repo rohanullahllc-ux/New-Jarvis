@@ -42,6 +42,7 @@ touch:
 | `MIC_PAUSE` | Seconds of silence that end a sentence (1.3). Raise it if Jarvis cuts you off while you think |
 | `SPEECH_LANGUAGE`, `SPEECH_LANGUAGE_FALLBACK` | The accent Google's speech recognition expects: `en-pk` (default), `en-in`, `en-us`, `en-gb`. Try another if Jarvis mishears you; the fallback is tried once when the first understood nothing |
 | `MIC_BEEP` | A short beep when the microphone has just been opened: it means "speak now" |
+| `MIC_VOLUME` | If Windows has the microphone muted or under 50 percent at start-up, Jarvis sets it to this many percent (80). `0` = never touch the Windows setting |
 | `STARTUP_GREETING` | `short` (one sentence), `full` (adds weather, time table, to-do list, low battery) or `silent` |
 | `GUI_ANIMATIONS` | `false` gives still pictures in the window on a slow PC |
 | `ANTHROPIC_API_KEY` | Optional. With it Jarvis uses Claude; without it, the free command understanding and chat below |
@@ -108,8 +109,10 @@ within a few seconds.
 * **A quiet voice is made louder** before it is sent, the loudness that counts as speech is kept within sensible limits, and the
   room is measured again now and then or after three tries that heard nothing.
 * **He tells you why** when he heard something but could not make it out, or your voice is too quiet for the microphone.
-* **The Windows microphone volume matters most.** At start-up Jarvis checks it and says so if it is muted or under 50 percent (the
-  usual reason words go missing). Say "what is my microphone volume", "set the microphone volume to 80", "raise the mic" or
+* **The Windows microphone volume matters most.** At start-up Jarvis checks it. If Windows has the microphone muted or under
+  50 percent (the usual reason words go missing) he puts it right: he unmutes it and sets it to `MIC_VOLUME` (80 percent), says so in
+  the window's log, and only then measures the room. He never turns a louder microphone down, and `MIC_VOLUME=0` makes him leave
+  Windows alone and only warn. Say "what is my microphone volume", "set the microphone volume to 80", "raise the mic" or
   "unmute the microphone", or run `python audio_levels.py` (`--mic 80` sets it).
 * Check the whole chain with `python microphone.py` (it asks you to say a sentence and shows the levels).
 

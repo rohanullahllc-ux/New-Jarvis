@@ -11,7 +11,7 @@ import traceback
 import psutil
 
 import transcript
-from config import CHAT_PRELOAD, DEFAULT_CITY, STARTUP_GREETING, USER_NAME
+from config import CHAT_PRELOAD, DEFAULT_CITY, INPUT_MODE, STARTUP_GREETING, USER_NAME
 from microphone import listen
 from speech import Speak, SpeakStream, add_listener, remove_listener
 
@@ -219,6 +219,12 @@ def briefing():
 def _prewarm():
     """Load the command brain in the background while the greeting is spoken (importing it takes several seconds)."""
     def load():
+        if INPUT_MODE == "voice":
+            try:
+                import microphone
+                microphone.check_windows_volume()      # a muted or very quiet Windows microphone is put right before the first listen
+            except Exception:
+                pass
         try:
             from JarvisAdvancedBot import LocalBrain, NLU  # noqa: F401  (importing LocalBrain also imports every tool)
             NLU.warm_up()                              # the trained language model, if there is one

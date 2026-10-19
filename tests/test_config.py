@@ -30,6 +30,16 @@ class SettingReaderTests(unittest.TestCase):
             self.assertEqual(config.number("T_PADDED", 1), 8)
 
 
+class MicrophoneVolumeSettingTests(unittest.TestCase):
+    def test_the_setting_is_always_a_percentage(self):
+        self.assertTrue(0 <= config.MIC_VOLUME <= 100)
+
+    def test_the_example_settings_explain_it_and_give_the_default(self):
+        text = (config.BASE_DIR / ".env.example").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^MIC_VOLUME=80$")
+        self.assertIn("0 = never touch", text)
+
+
 class LocalAddressTests(unittest.TestCase):
     """On this Windows PC a connection to "localhost" waits two seconds for IPv6 to fail before trying IPv4."""
 

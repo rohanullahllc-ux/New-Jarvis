@@ -9,6 +9,7 @@ import builtins
 import importlib.abc
 import queue
 import sys
+import threading
 import time
 import types
 import unittest
@@ -21,6 +22,12 @@ import speech_recognition as sr  # noqa: E402
 
 import microphone  # noqa: E402
 import winmm_mic  # noqa: E402
+from tests.isolation import no_windows_audio  # noqa: E402
+
+
+def setUpModule():
+    no_windows_audio()                    # (getting the microphone ready also checks the Windows volume; these tests must not touch it)
+
 
 try:
     HAS_MIC = sys.platform == "win32" and bool(winmm_mic.list_devices())
@@ -43,6 +50,8 @@ def reset():
     microphone._typed_hint_shown = False
     microphone.last_note = ""
     microphone._calibration.update(at=0.0, base=0.0, misses=0)
+    microphone._volume_checked[0] = True                 # the Windows volume has been looked at: nothing to wait for
+    microphone._volume_done.set()
 
 
 class DeadBackend:
@@ -516,6 +525,49 @@ class LoudnessTests(VoicePipelineCase):
         self.assertLessEqual(recognizer.phrase_threshold, 0.2)
         self.assertLessEqual(recognizer.operation_timeout, 15)
         self.assertLessEqual(recognizer.non_speaking_duration, recognizer.pause_threshold)
+
+
+class WindowsVolumeFirstTests(unittest.TestCase):
+    """A muted or quiet Windows microphone is put right (see test_audio_levels) before the room is measured, so the speech threshold is
+    worked out at the volume the voice will really be heard at."""
+
+    def setUp(self):
+        reset()
+        self.addCleanup(reset)
+
+    def ready(self, check, wait=None):
+        recognizer = mock.Mock(energy_threshold=300)
+        self.order = []
+        recognizer.adjust_for_ambient_noise.side_effect = lambda *a, **k: self.order.append("measured the room")
+        with mock.patch.object(microphone, "check_windows_volume", check), mock.patch.object(microphone.sr, "Recognizer", return_value=recognizer), \
+                mock.patch.object(microphone, "Microphone", FakeSource), mock.patch("builtins.print"), \
+                mock.patch.object(microphone, "VOLUME_WAIT", wait or microphone.VOLUME_WAIT):
+            return microphone._ensure_ready()
+
+    def test_the_room_is_measured_only_after_the_volume_has_been_put_right(self):
+        def slow_check():
+            microphone._volume_done.clear()
+
+            def finish():
+                time.sleep(0.3)
+                self.order.append("volume put right")
+                microphone._volume_done.set()
+
+            threading.Thread(target=finish, daemon=True).start()
+
+        self.assertTrue(self.ready(slow_check))
+        self.assertEqual(self.order, ["volume put right", "measured the room"])
+
+    def test_a_check_that_hangs_cannot_hold_the_microphone_up_for_ever(self):
+        started = time.monotonic()
+        self.assertTrue(self.ready(microphone._volume_done.clear, wait=0.2))
+        self.assertLess(time.monotonic() - started, 3)
+        self.assertEqual(self.order, ["measured the room"])
+
+    def test_with_nothing_to_check_the_microphone_does_not_wait_at_all(self):
+        started = time.monotonic()
+        self.assertTrue(self.ready(lambda: None))
+        self.assertLess(time.monotonic() - started, 1)
 
 
 class PauseSetting(unittest.TestCase):

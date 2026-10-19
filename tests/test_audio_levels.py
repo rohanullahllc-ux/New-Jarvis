@@ -71,40 +71,116 @@ class StateTests(unittest.TestCase):
         self.assertEqual(A.advice(A.LOW_VOLUME, False), "")
 
 
-class StartupWarningTests(unittest.TestCase):
+class StartupVolumeTests(unittest.TestCase):
+    """At start-up Jarvis puts a muted or very quiet Windows microphone right (MIC_VOLUME percent), or only warns (MIC_VOLUME=0).
+    Windows is stood in for here: the real volume is never touched."""
+
     def setUp(self):
         microphone.last_note = ""
         microphone._volume_checked[0] = False
-        self.addCleanup(lambda: (setattr(microphone, "last_note", ""), microphone._volume_checked.__setitem__(0, False)))
+        self.addCleanup(lambda: (setattr(microphone, "last_note", ""), microphone._volume_checked.__setitem__(0, True),
+                                 microphone._volume_done.set()))
 
-    def check(self, state):
-        with mock.patch("audio_levels.state", return_value=state) if not isinstance(state, Exception) else mock.patch("audio_levels.state", side_effect=state), \
+    def run_check(self, state, setting=80, new_volume=80, change_fails=False):
+        """The start-up check. Returns what it printed and the stand-ins for 'set the volume' and 'unmute'."""
+        read = {"side_effect": state} if isinstance(state, Exception) else {"return_value": state}
+        change = {"side_effect": A.AudioError("Windows said no")} if change_fails else {"return_value": new_volume}
+        with mock.patch.object(microphone, "MIC_VOLUME", setting), mock.patch("audio_levels.state", **read), \
+                mock.patch("audio_levels.set_volume", **change) as set_volume, mock.patch("audio_levels.set_muted") as set_muted, \
                 mock.patch("builtins.print") as printed:
-            microphone._check_windows_volume()
+            microphone.check_windows_volume()
+            self.assertTrue(microphone._volume_done.wait(5), "the check never finished")
             for thread in threading.enumerate():
                 if thread.name == "mic-volume-check":
                     thread.join(5)
-        return " ".join(str(call.args[0]) for call in printed.call_args_list if call.args)
+        shown = " ".join(str(call.args[0]) for call in printed.call_args_list if call.args)
+        return shown, set_volume, set_muted
 
-    def test_a_turned_down_microphone_is_reported_in_the_log_and_to_the_window(self):
-        shown = self.check((28, False))
+    def test_a_very_quiet_microphone_is_raised_to_the_setting_and_the_user_is_told(self):
+        shown, set_volume, set_muted = self.run_check((28, False))
+        set_volume.assert_called_once_with(80)
+        set_muted.assert_not_called()
+        self.assertIn("only at 28 percent", shown)
+        self.assertIn("set it to 80 percent", shown)
+        self.assertNotIn("words go missing", shown)                        # nothing is left to warn about
+        self.assertEqual(microphone.take_note(), "")
+
+    def test_a_muted_microphone_is_switched_on_and_its_volume_left_alone(self):
+        shown, set_volume, set_muted = self.run_check((70, True))
+        set_muted.assert_called_once_with(False)
+        set_volume.assert_not_called()
+        self.assertIn("muted", shown)
+        self.assertIn("switched it on", shown)
+
+    def test_muted_and_quiet_are_both_put_right(self):
+        shown, set_volume, set_muted = self.run_check((28, True))
+        set_muted.assert_called_once_with(False)
+        set_volume.assert_called_once_with(80)
+        self.assertIn("muted and only at 28 percent", shown)
+        self.assertIn("switched it on and set it to 80 percent", shown)
+
+    def test_a_microphone_that_is_not_too_quiet_is_left_exactly_as_it_is(self):
+        for volume in (50, 60, 80, 100):                                   # (someone may have chosen 60 on purpose; none is ever turned down)
+            microphone._volume_checked[0] = False
+            shown, set_volume, set_muted = self.run_check((volume, False))
+            set_volume.assert_not_called()
+            set_muted.assert_not_called()
+            self.assertEqual(shown.strip(), "", volume)
+
+    def test_with_the_setting_at_zero_windows_is_left_alone_and_the_user_is_only_warned(self):
+        shown, set_volume, set_muted = self.run_check((28, False), setting=0)
+        set_volume.assert_not_called()
+        self.assertIn("only 28 percent", shown)
+        self.assertIn("only 28 percent", microphone.take_note())
+        microphone._volume_checked[0] = False
+        shown, set_volume, set_muted = self.run_check((90, True), setting=0)
+        set_muted.assert_not_called()
+        self.assertIn("muted", shown)
+
+    def test_a_setting_below_the_warning_level_is_obeyed_and_still_warned_about(self):
+        shown, set_volume, _ = self.run_check((30, False), setting=40, new_volume=40)
+        set_volume.assert_called_once_with(40)
+        self.assertIn("only 40 percent", shown)                            # (that is the user's choice, but it is still low)
+
+    def test_when_windows_refuses_the_change_the_user_is_told_what_to_do_by_hand(self):
+        shown, set_volume, _ = self.run_check((28, False), change_fails=True)
+        set_volume.assert_called_once_with(80)
+        self.assertNotIn("so I", shown)                                    # (nothing was done, so none is claimed)
         self.assertIn("only 28 percent", shown)
         self.assertIn("only 28 percent", microphone.take_note())
 
-    def test_a_muted_microphone_is_reported(self):
-        self.assertIn("muted", self.check((90, True)))
-
-    def test_a_fine_microphone_says_nothing_and_a_failure_is_silent(self):
-        self.assertEqual(self.check((90, False)).strip(), "")
-        microphone._volume_checked[0] = False
-        self.assertEqual(self.check(A.AudioError("no")).strip(), "")
+    def test_a_failure_to_read_the_volume_is_silent_and_still_ends_the_wait(self):
+        shown, set_volume, set_muted = self.run_check(A.AudioError("no"))
+        self.assertEqual(shown.strip(), "")
         self.assertEqual(microphone.take_note(), "")
+        set_volume.assert_not_called()
+        set_muted.assert_not_called()
 
     def test_it_looks_only_once_per_run(self):
-        self.check((28, False))
+        self.run_check((90, False))
         with mock.patch("audio_levels.state", side_effect=AssertionError("looked twice")):
-            microphone._check_windows_volume()
+            microphone.check_windows_volume()
             time.sleep(0.1)
+
+    def test_the_first_listen_can_tell_when_the_check_is_still_running(self):
+        release = threading.Event()
+        with mock.patch("audio_levels.state", side_effect=lambda *a: (release.wait(5), (90, False))[1]), mock.patch("builtins.print"):
+            microphone.check_windows_volume()
+            self.assertFalse(microphone._volume_done.is_set())
+            release.set()
+            self.assertTrue(microphone._volume_done.wait(5))
+
+
+class SelfCheckTests(unittest.TestCase):
+    def test_the_self_check_names_a_command_that_fixes_a_quiet_microphone(self):
+        """`python microphone.py` runs without Jarvis, so "say: set the microphone volume" would be no help there."""
+        with mock.patch("audio_levels.state", return_value=(28, False)), mock.patch.object(microphone.winmm_mic, "list_devices", return_value=[]), \
+                mock.patch.object(microphone, "_load_sounddevice", side_effect=microphone.MicrophoneError("none")), \
+                mock.patch.dict(microphone.BACKENDS, clear=True), mock.patch("builtins.print") as printed:
+            self.assertFalse(microphone.diagnose(speak_test=False))
+        output = " ".join(str(call.args[0]) for call in printed.call_args_list if call.args)
+        self.assertIn("only 28 percent", output)
+        self.assertIn("python audio_levels.py --mic 80", output)
 
 
 class MicrophoneToolTests(unittest.TestCase):
