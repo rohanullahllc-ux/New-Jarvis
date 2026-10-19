@@ -24,7 +24,7 @@ import units
 from config import DEFAULT_CITY, HOME_CURRENCY
 from JarvisAdvancedBot import ChatBrain, FreeBrain, Frames, NLU
 from JarvisAdvancedBot import tools as T
-from JarvisAdvancedBot.tools._common import read_clipboard
+from JarvisAdvancedBot.tools._common import first_sentences, read_clipboard
 from JarvisAdvancedBot.tools.productivity import LANGUAGES
 
 INTENTS = []
@@ -43,16 +43,50 @@ def intent(*patterns):
     return register
 
 
+# Words in front of a command that are not part of it, in whatever order and number people say them: "ok now open the task folder",
+# "so what time is it", "alright, could you please show my notes", "i want you to take a screenshot", "let's make a to do list".
+_FILLERS = (r"hey|ok|okay|um+|uh+|er+|hmm+|oh|ah|well(?! done)|so|now|then|and|also|just|right|alright|all right|anyway|actually|sorry|"
+            r"i mean|no i mean|i told you|i said|as i said|by the way")
+_ASKING = (r"(?:can|could|would|will) (?:you|u)(?: please)?|(?:would|do) you mind|(?:i|we) (?:want|need|would like|wanna|have to|got to|gotta) (?:you )?to|"
+           r"(?:i|we)'d like (?:you )?to|let's|lets|let us|go ahead and|you (?:can|may|should|could)|please|kindly|is it possible to|"
+           r"i was wondering if you could|help me(?: to)?(?= (?:make|create|add|write|build|find|open|set|start|plan|take|keep|schedule)\b)")
+_LEAD = re.compile(rf"^(?:{_FILLERS}|{_ASKING})\b[,.]?\s+(?=\w)")
+_TRAIL = re.compile(r"(?:[\s,]+(?:please|sir|for me|if you can|if you could|if you don't mind|quickly|at once|immediately))+$")
+
+
 def normalize(text):
     text = text.lower().strip()
     text = re.sub(r"\bjarvis\b[,]?", " ", text)
     text = re.sub(r"[?!.]+$", "", text)
     text = re.sub(r"^(?:(?:hey|ok|okay)\s+)?assistant\b[,]?\s+(?=\w)", "", text.strip())             # "Jarvis" is often heard as "assistant"
-    text = re.sub(r"^(?:(?:hey|ok|okay|um|uh|er|hmm|sorry|actually|i mean|no i mean|i told you|i said|as i said)[,.]?\s+)+(?=\w)",
-                  "", text.strip())
-    text = re.sub(r"^(?:(?:can|could|would|will) you\s+)?(?:please\s+)?", "", text.strip())
-    text = re.sub(r"\s+please$", "", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    for _ in range(10):
+        shorter = _LEAD.sub("", text, count=1)
+        if shorter == text:
+            break
+        text = shorter
+    return _TRAIL.sub("", text).strip()
+
+
+# Speech recognition often writes (and people often say) the "-ing" form of the verb that starts a command: "making to do list",
+# "opening task folder", "taking notes".
+IMPERATIVES = {
+    "making": "make", "creating": "create", "building": "build", "starting": "start", "beginning": "begin", "opening": "open",
+    "showing": "show", "taking": "take", "writing": "write", "adding": "add", "deleting": "delete", "removing": "remove",
+    "clearing": "clear", "reading": "read", "playing": "play", "closing": "close", "launching": "launch", "searching": "search",
+    "checking": "check", "setting": "set", "telling": "tell", "giving": "give", "sending": "send", "running": "run", "saving": "save",
+    "listing": "list", "finding": "find", "putting": "put", "scheduling": "schedule", "reminding": "remind", "translating": "translate",
+    "calculating": "calculate", "increasing": "increase", "decreasing": "decrease", "raising": "raise", "lowering": "lower",
+    "muting": "mute", "unmuting": "unmute", "switching": "switch", "stopping": "stop", "pausing": "pause", "resuming": "resume",
+    "getting": "get", "bringing": "bring", "using": "use", "keeping": "keep", "jotting": "jot", "locking": "lock", "turning": "turn",
+}
+
+
+def imperative(text):
+    """The same words with a leading "-ing" verb made plain ("making to do list" -> "make to do list"), or None."""
+    first, _, rest = text.partition(" ")
+    base = IMPERATIVES.get(first)
+    return f"{base} {rest}" if base and rest else None
 
 
 def original():
@@ -112,7 +146,7 @@ def _number(word):
 
 
 def _sentences(text, count=2):
-    return " ".join(re.split(r"(?<=[.!?])\s+", text.strip())[:count])
+    return first_sentences(text, count)
 
 
 # ---------------------------------------------------------------- small talk
@@ -250,15 +284,19 @@ FINISHED = re.compile(r"(?:(?:i am|i'm|im|we are|we're|that is|that's|thats|all|
                       r"|(?:that is|that's|thats) (?:all|it)(?: for now| for today)?|(?:no|nothing)(?: more| else)?|nope|stop|enough|end|i am|i'm|im")
 
 
-@intent(rf"^(?:make|create|start|build|prepare|set up|write)(?: me)?(?: a| my)?(?: new)? (?:(?:to ?do|to-do|todo)(?: list)?|tasks? list)(?: this| just)?(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?(?:\b.*)?$")
-def make_todo_list(m, ask):
-    """Take the tasks one at a time. A task said with a time ("call Ali at 5 pm") also gets a reminder at that time."""
-    named = m["day"] or (DAY_WORDS.search(m.string).group(1) if DAY_WORDS.search(m.string) else "")
-    day = _day_from_word(named or "today")
+LIST_DAY = r"(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?"
+STARTING = r"(?:make|making|create|creating|start|starting|begin|beginning|build|building|prepare|preparing|set up|setting up|write|writing)"
+
+
+def _take_tasks(ask, day, first=""):
+    """Take the tasks one at a time. A task said with a time ("call Ali at 5 pm") also gets a reminder at that time.
+    ``first`` is a task that was already said in the request ("make a to do list and add call Ali")."""
     added = []
     question = "Okay sir. You can add a time, like: call Ali at 5 pm. Say done when you have finished. What is the first task?"
+    pending = first.strip()
     while len(added) < 20:
-        answer = ask(question).strip()
+        answer = pending or ask(question).strip()
+        pending = ""
         spoken = normalize(answer)
         if not spoken or FINISHED.fullmatch(spoken):
             break
@@ -274,11 +312,45 @@ def make_todo_list(m, ask):
     return f"Done sir. I added {len(added)} task{'' if len(added) == 1 else 's'}: " + "; ".join(added) + "."
 
 
+NOT_A_TASK = re.compile(r"(?:timing|times?|some|few|several|more|many|tasks?|things|items|stuff|reminders?|reminding|another|it|that|this|"
+                        r"something|anything|details|a task|the tasks?)\b|.*\b(?:to|in|into|on) (?:it|the list|my list|this|that|there)\b")
+
+
+@intent(rf"^{STARTING}(?: me)?(?: a| my| the)?(?: new)? (?:(?:to ?do|to-do|todo)(?: list)?|tasks? list|list of (?:tasks|things to do))(?: this| just)?{LIST_DAY}(?:\b.*)?$",
+        rf"^(?:i )?(?:need|want|would like) (?:a |an |my )?(?:new )?(?:to ?do|to-do|todo|task) list{LIST_DAY}$")
+def make_todo_list(m, ask):
+    named = m["day"] or (DAY_WORDS.search(m.string).group(1) if DAY_WORDS.search(m.string) else "")
+    after = re.split(r"\blist\b", m.string, maxsplit=1)[-1]                      # "... and add writing a python program tonight"
+    said = re.search(r"\badd (?:the |a |an )?(?:task )?(?P<first>.+)$", after)
+    first = said["first"].strip() if said and not NOT_A_TASK.match(said["first"].strip()) else ""     # ("add timing to it" is not a task)
+    return _take_tasks(ask, _day_from_word(named or "today"), Frames.tidy_task(_as_typed(first)) if first else "")
+
+
+MANY = r"(?:some|a few|few|several|more|many|multiple|a couple of|a bunch of|new|my|the)"
+THINGS = r"(?:tasks?|things|items|stuff|to ?dos?|errands|chores)"
+ONTO = rf"(?: (?:to|in|into|on|onto) (?:my |the )?(?:{TODO}|list))?"
+MANY_TASKS = re.compile(rf"(?:{MANY} )*(?:tasks|things|items|stuff|to ?dos|errands|chores)|some|a few|few|several|more|many|multiple|a couple|a bunch")
+NO_TASK = re.compile(r"(?:(?:a|an|the|my|new|another|one|next) )*(?:task|item|thing|to ?do)?|something|anything|it|that|this")
+
+
+@intent(rf"^(?:(?:start|begin|keep|continue|resume) )?adding(?: {MANY})* {THINGS}{ONTO}{LIST_DAY}$",
+        rf"^add (?:{MANY} )+{THINGS}{ONTO}{LIST_DAY}$",
+        rf"^add (?:things|stuff|items|tasks|to ?dos){ONTO}{LIST_DAY}$")
+def add_several_tasks(m, ask):
+    """"add some tasks", "start adding things to the list": more than one task, taken one at a time like a new list."""
+    named = m.groupdict().get("day") or ""
+    return _take_tasks(ask, _day_from_word(named or "today"))
+
+
 @intent(rf"^(?:add|put|write) (?P<task>.+?) (?:to|on|in|into) (?:my |the )?{TODO}$",
         r"^(?:add|new|create|schedule|make|set up) (?:me )?(?:a |an )?(?:new )?task(?: to do)?[:,]?\s*(?P<task>.*)$")
 def add_task(m, ask):
     task = _as_typed(m["task"].strip())
     if re.match(r"(?:to|for|on|in|into|at)\b", task):        # "to my tutori": a sentence that stopped, not a task
+        task = ""
+    if MANY_TASKS.fullmatch(task.lower()):                   # "add some tasks": not one task called "some"
+        return _take_tasks(ask, _day_from_word("today"))
+    if NO_TASK.fullmatch(task.lower()):                      # "add a task", "add something": the task itself is still to come
         task = ""
     task = Frames.tidy_task(task) if task else ask("What's the task?")
     return T.add_task(task) + "." if task else "Okay, nothing added."
@@ -390,7 +462,8 @@ def forget_one_fact(m, ask):
 
 # ---------------------------------------------------------------- notes, password, jokes, screenshot
 
-@intent(r"^(?:start|begin|resume)(?: taking| writing| making)(?: some| a)? notes?$")
+@intent(r"^(?:start|begin|resume)(?: taking| writing| making)(?: some| a)? notes?$",
+        r"^(?:(?:start|begin|resume|keep)(?: taking| writing| making)?|take|make|write)(?: some| a few| more| my)?(?: new)? notes$")
 def start_notes(m, ask):
     text = ask("Okay sir. What should the note say?").strip()
     return T.take_note(text) + "." if text else "Okay, no note then."
@@ -501,6 +574,8 @@ def _by_frame(text, ask):
         if len(nouns) != 1:
             return None
         noun = next(iter(nouns))
+        if noun == "task" and frame.many:                    # "add some tasks": one after another, like a new list
+            return _take_tasks(ask, day or _day_from_word("today"))
         item = frame.text or ask("What's the task?" if noun == "task" else "What should the note say?").strip()
         if not item:
             return "Okay, nothing added."
@@ -559,7 +634,7 @@ def _command_words():
     return _vocabulary
 
 
-NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note|note (?:that|down))"
+NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note\b|note (?:that|down))"      # ("take notes" must not save a note called "s")
 
 
 @intent(r"^jot(?: down)?[:,]? (?P<text>(?!a task\b).+)$")
@@ -1279,10 +1354,37 @@ WEBSITES = {
 }
 
 
+@intent(r"^(?:open|show|go to|browse|launch|start)(?: me)?(?: the| my| your)? (?P<name>[a-z0-9][a-z0-9 _.&'-]*?) (?:folder|holder|directory)$")
+def open_a_named_folder(m, ask):
+    """"open <name> folder" for any name: the folder with that name in the usual places, else what a slip of the ear probably meant
+    (speech recognition hears "task" as "test" or "text", and "note" as "not"), else an honest "I can't find it". It must never
+    end up typing the words into the Start menu, which is what an unknown name used to do."""
+    name = _as_typed(m["name"]).strip()
+    try:
+        T.open_folder(name)
+        return f"Opening your {name} folder, sir."
+    except ToolError:
+        pass
+    words = set(name.lower().split())
+    sorry = f"I couldn't find a folder called {name}, so I'm opening your "
+    if words & (Frames.TASK_SLIPS | {"task", "tasks"}):
+        from JarvisAdvancedBot.tools._common import folder
+        T.open_folder(str(folder("Tasks")))
+        return sorry + "tasks folder, sir."
+    if words & (Frames.NOTE_SLIPS | {"note", "notes"}):
+        T.open_notes("folder")
+        return sorry + "notes folder, sir."
+    if words & {"screenshot", "screenshots"} or name.lower() in {"screen shot", "screen shots"}:
+        T.open_screenshots("folder")
+        return sorry + "screenshots folder, sir."
+    return (f"I couldn't find a folder called {name}, sir. I can open your Documents, Downloads, Desktop, Pictures, Music or Videos "
+            "folder, or your tasks, notes or screenshots folder.")
+
+
 @intent(r"^(?:open|launch|start|run) (?:the |my )?(?P<name>.+?)(?: app| application| website| site| for me)?$")
 def open_something(m, ask):
     name = m["name"].strip()
-    if len(name.split()) > 3 or re.search(r"\b(?:so that|i can|that i|to do|chat|taking|writing)\b", name):
+    if len(name.split()) > 3 or re.search(r"\b(?:so that|i can|that i|to do|chat|taking|writing|adding|making|creating|things|list|folders?)\b", name):
         return None                                      # a sentence, not the name of an app: it is for the chat brain
     if name in WEBSITES or re.search(r"\.\w{2,}$", name):
         T.open_website(WEBSITES.get(name, name))
@@ -1334,6 +1436,10 @@ BARE_WORDS = {
     "reminders": "what's on my to do list", "screenshot": "take a screenshot", "weather": "what's the weather",
     "time": "what time is it", "date": "what's the date", "joke": "tell me a joke", "battery": "how is the battery",
     "volume up": "volume up", "volume down": "volume down", "mute": "mute",
+    "task folder": "open task folder", "tasks folder": "open task folder", "notes folder": "open notes folder",
+    "screenshots folder": "open the screenshots folder", "downloads folder": "open downloads folder",
+    "documents folder": "open documents folder", "pictures folder": "open pictures folder", "desktop folder": "open desktop folder",
+    "music folder": "open music folder", "videos folder": "open videos folder",
 }
 _LEADING = re.compile(r"^(?:(?:open|launch|start|run|show|display|use|see|check|view|read|go to|bring up|give me|tell me)\s+)+"
                       r"(?:(?:me|the|my|a|your|jarvis)\s+)*")
@@ -1388,8 +1494,11 @@ def understands(text):
     """True if one of the command patterns (not the catch-all question one) matches the text. It tells a real "do this, then
     that" from a sentence that merely has "then" in it."""
     wording = _canonical(normalize(text))
-    return bool(wording) and not EXPLANATION.match(wording) and (bool(SESSION_WORDS.fullmatch(wording))
-                              or any(pattern.search(wording) for pattern, handler in INTENTS if handler is not knowledge))
+    if not wording or EXPLANATION.match(wording):
+        return False
+    return bool(SESSION_WORDS.fullmatch(wording)) or any(
+        pattern.search(candidate) for candidate in (wording, imperative(wording)) if candidate
+        for pattern, handler in INTENTS if handler is not knowledge)
 
 
 GENERIC_HANDLERS = {"open_something", "close_something", "youtube_play", "google", "knowledge", "calculate", "wolfram"}
@@ -1404,9 +1513,10 @@ def is_command(text):
         return False
     if SESSION_WORDS.fullmatch(wording):
         return True
-    handler = next((h for pattern, h in INTENTS if pattern.search(wording)), None)
-    if handler is not None and handler.__name__ not in GENERIC_HANDLERS:
-        return True
+    for candidate in (wording, imperative(wording)):           # ("making to do list" is "make to do list")
+        handler = next((h for pattern, h in INTENTS if candidate and pattern.search(candidate)), None)
+        if handler is not None and handler.__name__ not in GENERIC_HANDLERS:
+            return True
     frame = Frames.parse(wording)
     if frame is not None and (frame.nouns or frame.which == "all"):
         return True
@@ -1471,6 +1581,29 @@ ANOTHER = re.compile(r"(?:^|\b)(?:another|one more)(?: one)?$")
 _last_fun = [""]                                        # the last joke, fact, advice, activity or dog request, for "another"
 
 
+def _run_patterns(text, ask, specific_only=False):
+    """The reply of the first command pattern (in their order) that fits ``text`` and has something to say, or None.
+    ``specific_only`` leaves out the patterns that fit almost any words ("open ...", "play ...", "who is ...")."""
+    for pattern, handler in INTENTS:
+        if specific_only and handler.__name__ in GENERIC_HANDLERS:
+            continue
+        match = pattern.search(text)
+        if not match:
+            continue
+        try:
+            reply = handler(match, ask)
+            if reply is not None and handler in (joke, random_fact, bored, advice, dog):
+                _last_fun[0] = text
+        except ToolError as e:
+            return str(e)
+        except Exception:
+            traceback.print_exc()                       # show the real problem instead of hiding it
+            return "Sorry sir, that didn't work. The details are in the window."
+        if reply is not None:
+            return reply
+    return None
+
+
 def LocalReply(query, ask=lambda question: "", guessed=False):
     """Return the reply for a command, or None if it wasn't understood. ``guessed`` is set when the command is the language
     model's rewrite of what was said, so a rewrite that no pattern understands cannot be rewritten again."""
@@ -1492,21 +1625,14 @@ def LocalReply(query, ask=lambda question: "", guessed=False):
                 return reply
     if ANOTHER.search(text) and _last_fun[0]:
         text = _last_fun[0]                              # "another", "that's not funny, another one": the same kind again
-    for pattern, handler in INTENTS:
-        match = pattern.search(text)
-        if not match:
-            continue
-        try:
-            reply = handler(match, ask)
-            if reply is not None and handler in (joke, random_fact, bored, advice, dog):
-                _last_fun[0] = text
-        except ToolError as e:
-            return str(e)
-        except Exception:
-            traceback.print_exc()                       # show the real problem instead of hiding it
-            return "Sorry sir, that didn't work. The details are in the window."
+    plain = None if guessed else imperative(text)
+    if plain:                                            # "making to do list": read as "make to do list", but only by patterns that
+        reply = _run_patterns(plain, ask, specific_only=True)       # mean something specific (not "open ..." or "play ...")
         if reply is not None:
             return reply
+    reply = _run_patterns(text, ask)
+    if reply is not None:
+        return reply
     if guessed:
         return None
     try:

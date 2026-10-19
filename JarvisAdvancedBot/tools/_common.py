@@ -170,9 +170,13 @@ def plain(text):
     return " ".join(re.sub(r"[^\x20-\x7E]", " ", html.unescape(text or "")).split())
 
 
+_SENTENCE_END = re.compile(r"(?<=[.!?])(?<!\b\d\.)(?<!\b\d\d\.)\s+")       # (the "1." and "12." of a numbered list end nothing)
+
+
 def first_sentences(text, count=2):
-    """The first ``count`` sentences of ``text`` (for reading summaries aloud)."""
-    return " ".join(re.split(r"(?<=[.!?])\s+", (text or "").strip())[:count])
+    """The first ``count`` sentences of ``text`` (for reading summaries aloud). The numbers of a list ("Recent notes: 1. buy milk,
+    2. call Ali") are not the ends of sentences: cutting there dropped every note after the fourth."""
+    return " ".join(_SENTENCE_END.split((text or "").strip())[:count])
 
 
 def _open_clipboard(user32):

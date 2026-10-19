@@ -11,8 +11,12 @@ import re
 from typing import NamedTuple, Optional
 
 REMOVE = {"remove", "delete", "erase", "clear", "wipe", "cancel", "drop", "scrap", "discard", "kill", "empty", "uncheck",
-          "complete", "completed", "finish", "finished"}
-ADD = {"add", "added", "adding", "create", "make", "put", "insert", "write", "append", "new"}
+          "complete", "completed", "finish", "finished", "removing", "deleting", "erasing", "clearing", "wiping", "cancelling",
+          "canceling", "dropping", "discarding", "finishing", "completing"}
+ADD = {"add", "added", "adding", "create", "creating", "make", "making", "put", "putting", "insert", "inserting", "write", "writing",
+       "append", "appending", "new"}
+QUANTITY = {"some", "few", "several", "more", "many", "multiple", "couple", "bunch", "lots", "lot"}      # "add SOME tasks" is not a task called "some"
+PLURAL_THINGS = {"tasks", "items", "things", "stuff", "todos", "errands", "chores"}
 TASK = {"task", "tasks", "todo", "todos", "item", "items", "errand", "errands", "chore", "chores", "assignment", "assignments"}
 TASK_SLIPS = {"tas", "tusk", "tusks", "test", "tests", "text", "texts", "taste", "tasked"}     # how "task" is often heard
 NOTE = {"note", "notes", "memo", "memos"}
@@ -26,7 +30,8 @@ CARDINALS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "se
 DAYS = {"today", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 LEAD = {"can", "you", "could", "would", "will", "please", "kindly", "ok", "okay", "hey", "i", "want", "to", "need", "like", "let",
         "me", "just", "now", "then", "so", "and", "also", "jarvis", "go", "ahead", "you'd", "i'd", "i'll", "should", "yes", "but",
-        "well", "actually", "sorry", "again", "quickly"}
+        "well", "actually", "sorry", "again", "quickly", "start", "starting", "begin", "keep", "continue", "resume", "lets", "us", "oh",
+        "um", "uh", "hmm", "anyway", "right", "alright"}
 FILLER = {"the", "a", "an", "my", "me", "from", "off", "of", "on", "in", "to", "do", "list", "folder", "please", "can", "you",
           "could", "would", "will", "now", "just", "one", "i", "is", "it", "that", "this", "those", "these", "and", "also", "then",
           "for", "as", "with", "at", "so", "ok", "okay", "hey", "number", "no", "num", "another", "next", "more", "out", "away",
@@ -49,6 +54,7 @@ class Frame(NamedTuple):
     text: str                         # the words of the item, when which == "text" (or what to add)
     day: str                          # "today", "tomorrow", a weekday name, or ""
     count: int = 1                    # "the last TWO tasks": how many, when which is "last" or "first"
+    many: bool = False                # "add some tasks": more than one item, none of them said yet
 
 
 def _number(token, before):
@@ -126,12 +132,14 @@ def parse(text) -> Optional[Frame]:
         nouns = weak
     if not nouns and not which and action == "add":
         return None
-    skip = FILLER | {"another", "new", "next", "add", "added", "adding"}
+    skip = FILLER | QUANTITY | {"another", "new", "next", "add", "added", "adding"}
+    many = False
     if action == "add":                                      # what to add: everything between the first and last meaningful word
         meaningful = [i for i, w in enumerate(rest) if i not in used and w not in skip and w not in TASK_SLIPS and w not in NOTE_SLIPS]
         item = tidy_task(" ".join(rest[meaningful[0]:meaningful[-1] + 1])) if meaningful else ""
         if item and not (nouns & {"task"}) and "note" not in nouns:
             item = ""
+        many = not item and bool(set(rest) & (QUANTITY | PLURAL_THINGS))
     else:
         left = [w for i, w in enumerate(rest) if i not in used and w not in FILLER and w not in REMOVE and w not in ADD
                 and w not in TASK_SLIPS and w not in NOTE_SLIPS]
@@ -146,7 +154,7 @@ def parse(text) -> Optional[Frame]:
         return None
     if action == "add":
         which = "text" if item else ""
-    return Frame(action, frozenset(nouns), which, number, item if which == "text" else "", day, count)
+    return Frame(action, frozenset(nouns), which, number, item if which == "text" else "", day, count, many)
 
 
 # ---------------------------------------------------------------- number words

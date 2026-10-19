@@ -200,25 +200,74 @@ def system_power_action(action: Literal["shutdown", "restart", "sleep", "lock", 
 
 # ---------------------------------------------------------------- folders and Jarvis's own windows
 
+def _folder_roots():
+    """Where to look for a folder that is only named: Windows' own folders, then the home folder."""
+    roots = []
+    for name in KNOWN_FOLDERS:
+        try:
+            roots.append(known_folder(name))
+        except Exception:                                    # noqa: BLE001 - one folder Windows can't place must not stop the rest
+            pass
+    roots.append(Path.home())
+    return [root for root in dict.fromkeys(roots) if root.is_dir()]
+
+
+def _subfolders(path):
+    try:
+        return [child for child in path.iterdir() if child.is_dir() and not child.name.startswith((".", "$"))][:400]
+    except OSError:
+        return []
+
+
+def _find_folders(name):
+    """Folders called ``name`` (capitals, spaces, dashes and a plural "s" do not matter) in the usual places: directly inside them
+    first, then one level deeper. Gives up looking after a few seconds."""
+    def plain(text):
+        return re.sub(r"[\s_-]+", "", text).lower().rstrip("s")
+
+    wanted, found, deadline = plain(name), [], time.monotonic() + 3
+    level = [root for root in _folder_roots()]
+    for _ in range(2):
+        next_level = []
+        for parent in level:
+            for child in _subfolders(parent):
+                if time.monotonic() > deadline:
+                    return found[:5]
+                if plain(child.name) == wanted and child not in found:
+                    found.append(child)
+                next_level.append(child)
+        if found:
+            break
+        level = next_level
+    return found[:5]
+
+
 @beta_tool
 def open_folder(location: str) -> str:
     """Open a drive or folder in File Explorer.
 
     Args:
-        location: A drive letter such as "D", a full path, or one of: desktop, documents, downloads, pictures, music, videos.
+        location: A drive letter such as "D", a full path, one of: desktop, documents, downloads, pictures, music, videos, or just
+            the name of a folder in one of those places or in the home folder, such as "python projects".
     """
     text = location.strip().strip('"')
     drive = re.fullmatch(r"(?:drive |disk |local disk )?([A-Za-z]):?\\?", text, flags=re.I)
+    others = 0
     if drive:
         path = Path(f"{drive.group(1).upper()}:\\")
     elif text.lower() in KNOWN_FOLDERS:
         path = known_folder(text)
-    else:
-        path = Path(text).expanduser()
+    elif re.search(r"[\\/:]", text) or text.startswith("~"):
+        path = Path(text).expanduser()                       # a path
+    else:                                                    # only a name (never relative to wherever Jarvis happens to be running)
+        found = _find_folders(text) if text else []
+        if not found:
+            raise ToolError(f"I can't find a folder or drive called {location}.")
+        path, others = found[0], len(found) - 1
     if not path.is_dir():
         raise ToolError(f"I can't find a folder or drive called {location}.")
     os.startfile(str(path))
-    return f"Opened {path}"
+    return f"Opened {path}" + (f" (there {'is' if others == 1 else 'are'} {others} more with that name)" if others else "")
 
 
 @beta_tool

@@ -151,6 +151,19 @@ parts (action + thing + which one, so "can you remove the third task I am done f
 trained. Anything that deletes asks yes or no first, and if he still cannot tell what you mean he says he has changed
 nothing instead of pretending.
 
+Before any of that, the words around a command are taken away, in any order and number: "ok now", "so", "then", "well",
+"and", "just", "alright", "can you", "could you please", "i want you to", "let's", "go ahead and", and at the end "please",
+"sir", "for me", "if you can" ("ok now could you please open the task folder, sir" is "open the task folder"). The "-ing"
+form that speech recognition often writes is read as the plain command ("making to do list", "opening task folder",
+"taking notes"), but only for commands that mean something specific, so "opening hours of the bank" is still a question.
+
+* **Several tasks at once:** "add some tasks", "start adding things to the list" and "make a to do list" all take the tasks
+  one after another until you say done. "make a to do list and add call Ali" adds call Ali straight away.
+* **Folders by name:** "open the python folder" finds a folder called Python in Documents, Downloads, Desktop, Pictures, Music,
+  Videos or the home folder (up to two levels down). Speech recognition often hears "task" as "test" or "text" and "note" as
+  "not"; if no folder has the name he says so and opens the tasks or notes folder instead. A name he cannot find is
+  reported, never typed into the Start menu.
+
 ## Looking back at your conversations
 
 Jarvis keeps a private record of every session, one file a day in `Logs/conversations/`: what you said or typed, what he

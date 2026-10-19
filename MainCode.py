@@ -28,7 +28,8 @@ SLEEP_COMMAND = re.compile(r"(?:you can )?(?:go to |take (?:a )?)?(?:sleep|rest)
 GREETING_LEAD = re.compile(r"(?:hello|hi|hey|ok|okay|alright|please)[ ,]+(?=\S)")
 STOP_COMMAND = re.compile(r"(?:you can |you may |go ahead and )?(?:(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?(?: exit)?"
                           r"(?: (?:the |this |your )?(?:program|application|app|jar|jarvis|yourself|assistant)(?: application)?)?"
-                          r"|(?:close|stop|end|shut down|turn off)(?: exit)? (?:the |this |your )?(?:program|application|jar|yourself|jarvis application))")
+                          r"|(?:close|stop|end|shut down|turn off)(?: exit)? (?:the |this |your )?(?:program|application|jar|yourself|jarvis application))"
+                          r"(?: right now| now)?")
 RESET_COMMAND = re.compile(r"(?:start (?:a )?)?(?:new|fresh) (?:chat|conversation)|start over|forget everything|"
                            r"(?:clear|reset|delete|wipe|erase)(?: out)? (?:your |the |this |our |my )?(?:memory|chat|conversation|history)")
 

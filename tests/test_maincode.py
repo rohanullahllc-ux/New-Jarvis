@@ -36,7 +36,8 @@ class QuitCommandTests(unittest.TestCase):
     def test_every_way_of_asking_jarvis_to_quit_is_understood(self):
         from JarvisAdvancedBot.LocalBrain import normalize
         for phrase in ("quit", "exit", "exit exit the program", "can you quit jar", "please exit the application", "close the program",
-                       "quit jarvis", "stop the program", "shut down yourself", "bye", "ok goodbye jarvis"):
+                       "quit jarvis", "stop the program", "shut down yourself", "bye", "ok goodbye jarvis", "quit now",
+                       "exit the program now", "ok now quit", "so close the program right now", "alright you can exit"):
             polite = normalize(phrase)
             self.assertTrue(MainCode.STOP_COMMAND.fullmatch(phrase.lower().replace("jarvis", "").strip())
                             or MainCode.STOP_COMMAND.fullmatch(polite), phrase)

@@ -1104,6 +1104,206 @@ class RewordedCommandTests(SlightlyDifferentWordingTests):
         self.assertTrue(self.say("is the laptop plugged in"))
 
 
+class ThirdRoundOfRecordedIssuesTests(SlightlyDifferentWordingTests):
+    """The next real testing session: "ok now open task folder" went to the chat (11 seconds, nothing done), "making to do list"
+    showed the list instead of starting one, "start adding things in the list" went to the chat, "open test folder" (Google heard
+    "task" as "test") typed the words into the Start menu, and the list of notes stopped after "4."."""
+
+    LEADS = ("", "ok now", "now", "so", "then", "well", "and", "just", "alright", "right", "oh", "um", "hmm", "actually", "anyway",
+             "ok so", "ok then", "sorry", "i mean", "can you", "could you please", "would you", "i want you to", "i would like to",
+             "i need you to", "let's", "go ahead and", "you can", "please", "kindly", "hey jarvis")
+    TAILS = ("", " please", " for me", " sir", " if you can", " quickly", " at once")
+
+    def test_words_around_a_command_do_not_change_what_it_does(self):
+        commands = (("open the notes folder", "open_notes", ("folder",)), ("show my notes", "read_notes", ("",)),
+                    ("open downloads", "open_folder", ("downloads",)), ("take a screenshot", "take_screenshot", ()),
+                    ("open notepad", "open_app", ("notepad",)), ("open task folder", "open_folder", None))
+        for lead in self.LEADS:
+            for tail in self.TAILS:
+                for command, tool, args in commands:
+                    phrase = f"{lead} {command}{tail}".strip()
+                    self.say(phrase)
+                    self.assertEqual([call[0] for call in self.calls], [tool], phrase)
+                    if args is not None:
+                        self.assertEqual(self.calls[0][1], args, phrase)
+
+    def test_words_around_a_question_do_not_change_the_answer(self):
+        for lead in self.LEADS:
+            for tail in ("", " please", " sir"):
+                self.assertRegex(self.no_tool(f"{lead} what time is it{tail}".strip()), r"^It's \d{1,2}:\d{2} [AP]M\.$", lead)
+
+    def test_what_is_left_of_a_sentence_once_the_extra_words_are_taken_away(self):
+        for said, left in (("ok now open task folder", "open task folder"), ("so what time is it", "what time is it"),
+                           ("alright, could you please show my notes", "show my notes"), ("i want you to take a screenshot", "take a screenshot"),
+                           ("let's make a to do list", "make a to do list"), ("help me make a to do list", "make a to do list"),
+                           ("open notes, sir", "open notes"), ("open notes please", "open notes"), ("hey jarvis, open notes", "open notes"),
+                           ("well done", "well done"), ("help me", "help me"), ("now", "now"), ("what should i do now", "what should i do now"),
+                           ("thank you", "thank you"), ("great thanks", "great thanks"), ("ok", "ok"), ("so", "so"), ("what is the right way", "what is the right way")):
+            self.assertEqual(L.normalize(said), left, said)
+
+    def test_the_ing_form_of_a_verb_is_the_same_command(self):
+        for phrase in ("making to do list", "making a to do list", "creating a to-do list", "starting a to do list", "building a task list"):
+            self.say(phrase, answers=["buy milk", "done"])
+            self.assertEqual(self.calls, [("add_task", ("buy milk", self.today), {})], phrase)
+            self.assertIn("first task", self.questions[0], phrase)
+        for phrase in ("opening task folder", "opening the tasks holder", "showing the task folder"):
+            self.say(phrase)
+            self.assertEqual([call[0] for call in self.calls], ["open_folder"], phrase)
+        self.routes("opening the notes folder", "open_notes", "folder")
+        self.routes("taking notes", "take_note", "buy milk", answers=["buy milk"])
+        self.assertEqual(L.imperative("making to do list"), "make to do list")
+        self.assertIsNone(L.imperative("open notes"))
+        self.assertIsNone(L.imperative("making"))
+
+    def test_a_sentence_that_only_starts_with_an_ing_word_is_still_for_the_chat(self):
+        for phrase in ("opening hours of the bank", "playing football is fun", "making friends is hard", "running late today",
+                       "writing python program tonight"):
+            self.assertIsNone(self.no_tool(phrase), phrase)
+
+    def test_the_microphone_can_pick_sentences_with_extra_words_or_an_ing_verb(self):
+        for text in ("ok now open task folder", "making to do list", "opening task folder", "so show my notes", "start adding things in the list",
+                     "could you please take notes"):
+            self.assertTrue(L.is_command(text), text)
+        self.assertFalse(L.is_command("opening hours of the bank"))
+
+    def test_adding_several_tasks_starts_a_list_and_never_saves_a_task_called_some(self):
+        for phrase in ("add some tasks", "add a few tasks", "start adding things in the list", "start adding tasks", "keep adding tasks",
+                       "add things to my list", "i want to add some tasks", "adding tasks", "add several items to my to do list",
+                       "start adding things to the list", "ok now add some tasks"):
+            reply = self.say(phrase, answers=["buy milk", "call ali", "done"])
+            self.assertEqual([call[1][0] for call in self.calls if call[0] == "add_task"], ["buy milk", "call ali"], phrase)
+            self.assertIn("I added 2 tasks", reply, phrase)
+            self.assertIn("first task", self.questions[0], phrase)
+
+    def test_a_placeholder_is_never_saved_as_a_task(self):
+        self.routes("add a task", "add_task", "buy milk", answers=["buy milk"])
+        self.routes("add something to my to do list", "add_task", "buy milk", answers=["buy milk"])
+        self.assertEqual(self.questions, ["What's the task?"])
+
+    def test_a_task_said_with_the_list_is_added_without_asking_for_it_again(self):
+        reply = self.say("ok i mean make a to do list and add writing a python program tonight", answers=["done"])
+        self.assertEqual(self.calls, [("add_task", ("writing a python program tonight", self.today), {})])
+        self.assertEqual(self.questions, ["Added. What is the next task, or are you done?"])
+        self.assertIn("I added 1 task", reply)
+
+    def test_words_about_the_list_itself_are_not_taken_for_the_first_task(self):
+        self.say("Make a todo list for today, add timing to it and keep reminding me", answers=["buy bread", "done"])
+        self.assertEqual(self.calls, [("add_task", ("buy bread", self.today), {})])
+        self.assertIn("first task", self.questions[0])
+
+    def test_take_notes_asks_for_the_note_and_never_saves_the_letter_s(self):
+        for phrase in ("take notes", "start taking notes", "make some notes", "keep taking notes", "write notes"):
+            self.routes(phrase, "take_note", "buy milk", answers=["buy milk"])
+            self.assertEqual(self.questions, ["Okay sir. What should the note say?"], phrase)
+        self.routes("take a note buy milk", "take_note", "buy milk")
+
+    def test_a_list_of_many_notes_is_read_in_full(self):
+        listing = "Recent notes: 1. buy milk, 2. call ali, 3. pay rent, 4. plan the trip, 5. gym, 6. dentist, 7. tea, 8. eggs, 9. bread"
+        self.results["read_notes"] = listing
+        self.assertEqual(self.say("show my notes"), listing)
+        self.assertEqual(L._sentences("One. Two! Three? Four.", 2), "One. Two!")
+        self.assertEqual(L._sentences("It ended in 1945. Then it began. Next", 2), "It ended in 1945. Then it began.")
+
+    def folder_tool(self, missing):
+        """open_folder with these names missing from the PC (a missing one is an error, as with the real tool)."""
+        def run(location):
+            self.calls.append(("open_folder", (location,), {}))
+            if location in missing:
+                raise ToolError(f"I can't find a folder or drive called {location}.")
+            return f"Opened {location}"
+        return mock.patch.object(T, "open_folder", side_effect=run)
+
+    def test_a_folder_that_exists_is_opened_by_its_name(self):
+        with self.folder_tool(missing=()):
+            self.assertEqual(self.say("ok now open the python folder"), "Opening your python folder, sir.")
+        self.assertEqual(self.calls, [("open_folder", ("python",), {})])
+
+    def test_a_task_or_note_folder_heard_as_another_word_is_opened_and_the_user_is_told(self):
+        for phrase, word in (("open test folder", "test"), ("open text folder", "text"), ("ok now open the tas folder", "tas")):
+            with self.folder_tool(missing=(word,)):
+                reply = self.say(phrase)
+            self.assertIn(f"couldn't find a folder called {word}, so I'm opening your tasks folder", reply, phrase)
+            self.assertTrue(self.calls[1][1][0].endswith("Tasks"), phrase)
+        with self.folder_tool(missing=("not",)):
+            reply = self.say("open not folder")
+        self.assertIn("so I'm opening your notes folder", reply)
+        self.assertEqual(self.calls[-1], ("open_notes", ("folder",), {}))
+        with self.folder_tool(missing=("screen shots",)):
+            self.assertIn("screenshots folder", self.say("open screen shots folder"))
+        self.assertEqual(self.calls[-1], ("open_screenshots", ("folder",), {}))
+
+    def test_an_unknown_folder_is_not_typed_into_the_start_menu(self):
+        with self.folder_tool(missing=("zebra",)):
+            reply = self.say("open zebra folder")
+        self.assertIn("couldn't find a folder called zebra", reply)
+        self.assertIn("Documents, Downloads", reply)
+        self.assertEqual([call[0] for call in self.calls], ["open_folder"])                # (never open_app, which types into the Start menu)
+
+    def test_a_folder_named_on_its_own_is_opened(self):
+        for phrase in ("task folder", "tasks folder", "notes folder", "downloads folder", "documents folder"):
+            self.say(phrase)
+            self.assertEqual(len(self.calls), 1, phrase)
+
+    def test_programs_whose_names_contain_a_task_or_notes_word_are_still_opened(self):
+        self.routes("open task manager", "open_app", "task manager")
+        self.routes("open sticky notes", "open_app", "sticky notes")
+
+
+class RealBackendTests(unittest.TestCase):
+    """The same commands with the real tools on a temporary DataBase: what is on disk afterwards is what counts."""
+
+    def setUp(self):
+        from JarvisAdvancedBot.tools import _common
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.db = Path(folder.name)
+        for patcher in (mock.patch.object(_common, "DB", self.db), mock.patch("speech.Speak"),
+                        mock.patch.object(L.FreeBrain, "available", return_value=False),
+                        mock.patch.object(L.ChatBrain, "available", return_value=False),
+                        mock.patch.object(L.NLU, "MODEL_FILE", Path("no such language model.joblib"))):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        L.NLU.reset()
+        self.addCleanup(L.NLU.reset)
+
+    def say(self, phrase, answers=()):
+        script = list(answers)
+        with redirect_stdout(io.StringIO()):
+            return L.LocalReply(phrase, lambda question: script.pop(0) if script else "")
+
+    def test_a_list_started_with_an_ing_verb_ends_up_in_the_task_file(self):
+        from JarvisAdvancedBot.tools import productivity
+        reply = self.say("ok making to do list", answers=["buy milk", "call ali", "done"])
+        self.assertIn("I added 2 tasks", reply)
+        self.assertEqual(productivity._read_tasks(datetime.date.today()), ["buy milk", "call ali"])
+
+    def test_several_tasks_added_at_once_are_in_the_file_and_none_is_called_some(self):
+        from JarvisAdvancedBot.tools import productivity
+        self.say("start adding things in the list", answers=["write the report", "done"])
+        self.assertEqual(productivity._read_tasks(datetime.date.today()), ["write the report"])
+        self.assertFalse(any("some" in line.split() for line in productivity._read_tasks(datetime.date.today())))
+
+    def test_all_nine_notes_are_read_out_not_the_first_three_and_a_dangling_number(self):
+        from JarvisAdvancedBot.tools import _common
+        (self.db / "Notes").mkdir()
+        for number in range(9):
+            path = self.db / "Notes" / f"Note {number}.txt"
+            path.write_text(f"Note {number}\n\nbuy milk", encoding="utf-8")
+            os.utime(path, (time.time() - 100 + number, time.time() - 100 + number))
+        reply = self.say("show my notes")
+        self.assertTrue(reply.startswith("Recent notes:"), reply)
+        for number in range(9):
+            self.assertIn(f"Note {number}", reply)
+        self.assertFalse(reply.rstrip().endswith("4."), reply)
+        self.assertEqual(len(list(_common.DB.glob("Notes/*.txt"))), 9)                  # (the real tools ran on the temporary folder)
+
+    def test_take_notes_saves_what_is_said_and_not_a_note_called_s(self):
+        self.say("take notes", answers=["finish the program tonight"])
+        saved = sorted((self.db / "Notes").glob("*.txt"))
+        self.assertEqual(len(saved), 1)
+        self.assertIn("finish the program tonight", saved[0].read_text(encoding="utf-8"))
+
+
 class MicrophoneVolumeCommandTests(BrainCase):
     def test_the_microphone_volume_can_be_asked_about_set_raised_lowered_and_unmuted(self):
         self.routes("set microphone volume to 80", "microphone_level", 80)

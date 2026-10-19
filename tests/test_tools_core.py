@@ -401,6 +401,49 @@ class WindowsTests(ToolCase):
             startfile.assert_called_once_with(str(self.db))
             self.fails(lambda: T.open_folder(location=str(self.db / "nothing here")), "can't find")
 
+    def test_open_folder_finds_a_folder_by_its_name_in_the_usual_places(self):
+        home = self.db / "home"
+        (home / "Documents" / "Python Projects").mkdir(parents=True)
+        (home / "Downloads" / "stuff" / "Deep One").mkdir(parents=True)
+        with mock.patch.object(windows, "_folder_roots", return_value=[home / "Documents", home / "Downloads"]), \
+                mock.patch.object(windows.os, "startfile") as startfile:
+            self.assertEqual(T.open_folder(location="python projects"), f"Opened {home / 'Documents' / 'Python Projects'}")
+            startfile.assert_called_once_with(str(home / "Documents" / "Python Projects"))
+            T.open_folder(location="deep-one")                       # one level deeper; capitals, dashes and spaces do not matter
+            self.assertEqual(startfile.call_args[0][0], str(home / "Downloads" / "stuff" / "Deep One"))
+            self.fails(lambda: T.open_folder(location="zebra"), "can't find")
+
+    def test_a_folder_name_is_never_looked_for_in_the_folder_jarvis_happens_to_run_in(self):
+        (self.db / "only_here").mkdir()
+        before = os.getcwd()
+        os.chdir(self.db)
+        self.addCleanup(os.chdir, before)
+        with mock.patch.object(windows, "_folder_roots", return_value=[]), mock.patch.object(windows.os, "startfile") as startfile:
+            self.fails(lambda: T.open_folder(location="only_here"), "can't find")
+            self.fails(lambda: T.open_folder(location=""), "can't find")
+        startfile.assert_not_called()
+
+    def test_two_folders_with_the_same_name_open_the_first_and_say_there_is_another(self):
+        first, second = self.db / "a" / "Docs", self.db / "b" / "Docs"
+        first.mkdir(parents=True)
+        second.mkdir(parents=True)
+        with mock.patch.object(windows, "_folder_roots", return_value=[self.db / "a", self.db / "b"]), \
+                mock.patch.object(windows.os, "startfile") as startfile:
+            self.assertEqual(T.open_folder(location="docs"), f"Opened {first} (there is 1 more with that name)")
+        startfile.assert_called_once_with(str(first))
+
+    def test_the_usual_places_are_windows_own_folders_then_the_home_folder(self):
+        roots = windows._folder_roots()
+        self.assertEqual(roots[-1], Path.home())
+        self.assertTrue(all(root.is_dir() for root in roots))
+
+    def test_first_sentences_do_not_end_at_the_numbers_of_a_list(self):
+        listing = "Recent notes: 1. buy milk, 2. call ali, 3. pay rent, 4. plan the trip, 5. gym"
+        self.assertEqual(_common.first_sentences(listing, 2), listing)
+        self.assertEqual(_common.first_sentences("Your notes: 1. a; 2. b; 3. c; 10. d; 11. e", 1), "Your notes: 1. a; 2. b; 3. c; 10. d; 11. e")
+        self.assertEqual(_common.first_sentences("It ended in 1945. Then it began. Next", 2), "It ended in 1945. Then it began.")
+        self.assertEqual(_common.first_sentences("", 2), "")
+
     def test_open_folder_asks_windows_where_its_own_folders_are(self):
         moved = self.db / "OneDrive" / "Desktop"                            # where OneDrive keeps it on many PCs
         moved.mkdir(parents=True)

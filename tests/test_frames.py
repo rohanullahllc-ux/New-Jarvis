@@ -76,6 +76,19 @@ class NumberWordTests(unittest.TestCase):
 
 
 class RepairTests(unittest.TestCase):
+    def test_adding_several_things_is_a_request_for_a_list_not_for_a_task_called_some(self):
+        for text in ("add some tasks", "add a few tasks", "start adding tasks", "adding things to my list", "keep adding items",
+                     "can you add several tasks"):
+            found = F.parse(text)
+            self.assertTrue(found and found.many and found.text == "" and found.action == "add", text)
+        for text in ("add buy milk to my tasks", "add a task call ali", "add a note buy milk"):
+            self.assertFalse(F.parse(text).many, text)
+
+    def test_the_ing_forms_of_add_and_remove_are_understood(self):
+        self.assertEqual(frame("deleting all the notes"), ("remove", ("note",), "all", 0, "", ""))
+        self.assertEqual(frame("removing the last task")[:3], ("remove", ("task",), "last"))
+        self.assertEqual(frame("adding a task buy milk")[:2], ("add", ("task",)))
+
     def test_typos_and_slips_in_command_words_are_put_right(self):
         for wrong, right in (("show all available wifi networds", "show all available wifi networks"),
                              ("give me saved wifi passowrds", "give me saved wifi passwords"),
