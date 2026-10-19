@@ -432,11 +432,17 @@ def read_notes(m, ask):
         r"(?=.*\b(?:unlock|log ?in|program|current|actual|real|forgot|forgotten|reveal|remind|tell me the|what(?:'s| is) the|"
         r"what(?:'s| is) my|my)\b).*$")
 def jarvis_password(m, ask):
+    named = re.search(r"\bpassword (?:for|of) (?!(?:jarvis|program|app|assistant|computer|pc|laptop|account|email|windows|login|screen|system|it)\b)(?:the |my )?([\w .-]+?)(?: wi-?fi| network)?$", m.string)
+    if named:
+        try:
+            return T.get_saved_wifi_password(named.group(1))
+        except ToolError:
+            pass                                          # not a saved network: it must be Jarvis's own
     return ("I don't keep your password in a form I can read out, sir, and I wouldn't say it aloud if I could. To choose a new "
             "one, open a terminal in the Jarvis folder and run: python gate.py --set-password")
 
 
-@intent(r"\b(?:generate|create|make|give me|new|random|strong)\b.*\bpassword\b")
+@intent(r"^(?!.*\bwi-?fi\b)(?!.*\b(?:saved|current|connected)\b).*\b(?:generate|create|make|give me|new|random|strong)\b.*\bpassword\b")
 def password(m, ask):
     length = re.search(r"(\d+)\s*(?:characters?|chars?|letters?|digits?|long)", m.string)
     return T.generate_password(int(length.group(1)) if length else 16)
@@ -483,6 +489,13 @@ intent(r"\b(?:computer|pc|laptop|system)\b.*\b(?:sleep|hibernate|suspend)\b",
        r"\b(?:sleep|hibernate|suspend)\b.*\b(?:computer|pc|laptop)\b")(_power("sleep", "put to sleep"))
 
 PLACES = r"desktop|documents|downloads|pictures"
+
+
+@intent(r"^(?:open|show|go to|browse)(?: the| my)? (?:tasks?|to ?do) (?:folder|holder|fol?der|directory)$")
+def open_tasks_folder(m, ask):
+    from JarvisAdvancedBot.tools._common import folder
+    T.open_folder(str(folder("Tasks")))
+    return "Opening your tasks folder, sir."
 
 
 @intent(r"^(?:open|show|go to|browse)(?: this| the)?(?: folder| file)?[:,]? (?P<path>[a-z]:[\\/].+)$")
@@ -965,6 +978,8 @@ def email(m, ask):
 @intent(r"\b(?:available|nearby|around|in range|visible) wi-?fi(?: networks| connections| names)?\b",
         r"\bwi-?fi (?:networks|connections|names) (?:available|nearby|around|in range)\b")
 def wifi_in_range(m, ask):
+    if re.search(r"\bpas\w*", m.string):
+        return None                                       # the password handler answers both
     import subprocess
     try:
         shown = subprocess.run(["netsh", "wlan", "show", "networks"], capture_output=True, text=True, timeout=15).stdout
@@ -981,11 +996,21 @@ def wifi_in_range(m, ask):
 def wifi(m, ask):
     found = re.search(r"\b(?:of|for)\s+(?:the |my )?(?:wi-?fi )?(?:network )?(?:named |called )?(.+?)(?: wi-?fi| network)?$", m.string)
     name = _as_typed(found.group(1)) if found else ""
+    if not name and re.search(r"\b(?:current|connected|this)\b", m.string):
+        from JarvisAdvancedBot.tools import world
+        try:
+            joined = re.search(r"^\s*SSID\s*:\s*(.+?)\s*$", world._netsh("show", "interfaces"), flags=re.M)
+        except ToolError:
+            joined = None
+        name = joined.group(1) if joined else ""
     if not name:
         name = ask(T.get_saved_wifi_password("")).strip()          # lists the saved networks, then asks which
         if not name:
             return "Okay, never mind."
-    return T.get_saved_wifi_password(name)
+    reply = T.get_saved_wifi_password(name)
+    if re.search(r"\b(?:available|nearby|in range)\b", m.string):
+        reply += " " + (wifi_in_range(re.search(r"", "available"), ask) or "")
+    return reply
 
 
 @intent(r"\bdownload\b.*\b(?:youtube|video|song|music|audio)\b", r"\b(?:youtube|video)\b.*\bdownload\b")

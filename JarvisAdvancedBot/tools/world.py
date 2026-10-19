@@ -144,7 +144,7 @@ def get_joke() -> str:
         joke = get_json("https://icanhazdadjoke.com/", headers={"Accept": "application/json"}).get("joke")
     except ToolError:
         joke = None
-    return (joke or random.choice(OFFLINE_JOKES)).strip()
+    return (joke or random.choice(OFFLINE_JOKES)).replace("�", "'").strip()
 
 
 # ---------------------------------------------------------------- party tricks (pure fiction)

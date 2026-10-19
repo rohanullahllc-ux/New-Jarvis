@@ -842,6 +842,24 @@ class RealSessionReviewTests(BrainCase):
         with mock.patch("subprocess.run", return_value=SimpleNamespace(stdout="")):
             self.assertIn("can't see any", self.no_tool("show all available wifi networks"))
 
+    def test_the_tasks_folder_and_its_typos_open_the_folder_not_an_app(self):
+        from JarvisAdvancedBot.tools import _common
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(_common, "DB", Path(folder)):
+            for phrase in ("open task folder", "open task holder", "open tasks folder", "can you open the tasks folder"):
+                self.say(phrase)
+                self.assertEqual([c[0] for c in self.calls], ["open_folder"], phrase)
+                self.assertTrue(self.calls[0][1][0].endswith("Tasks"))
+
+    def test_asking_for_a_saved_wifi_password_never_generates_one(self):
+        for phrase in ("give me saved wi-fi password", "show me the current connected wi-fi password"):
+            self.say(phrase, answers=[""])
+            self.assertNotIn("generate_password", [c[0] for c in self.calls], phrase)
+        self.routes("give me a strong password", "generate_password", 16)
+
+    def test_the_password_for_a_named_network_is_looked_up(self):
+        self.routes("can you tell me the password for khalil", "get_saved_wifi_password", "khalil")
+        self.assertIn("python gate.py --set-password", self.say("what's the password of jarvis"))
+
     def test_an_answer_that_is_not_a_link_cancels_the_download(self):
         reply = self.no_tool("can you download a youtube video", answers=["can you give me a business name"])
         self.assertIn("cancelled the download", reply)

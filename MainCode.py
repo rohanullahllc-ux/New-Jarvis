@@ -19,7 +19,8 @@ from speech import Speak, SpeakStream, add_listener, remove_listener
 # them ("Your list for tomorrow includes: wake up, breakfast, lunch...").
 PERSONAL_DATA = re.compile(r"(?=.*\b(?:my|today'?s|tomorrow'?s|today|tomorrow|tonight|i have|do i have)\b)"
                            r"(?=.*\b(?:to[- ]?do|todo|tasks?|schedule[ds]?|reminders?|time ?table|appointments?|calendar|list)\b)", re.I)
-SLEEP_COMMAND = re.compile(r"(?:you can |go to |take (?:a )?)?(?:sleep|rest)(?: mode)?(?: now)?")
+SLEEP_COMMAND = re.compile(r"(?:you can )?(?:go to |take (?:a )?)?(?:sleep|rest)(?: mode)?(?: now)?")
+GREETING_LEAD = re.compile(r"(?:hello|hi|hey|ok|okay|alright|please)[ ,]+(?=\S)")
 STOP_COMMAND = re.compile(r"(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?")
 RESET_COMMAND = re.compile(r"(?:start (?:a )?)?(?:new|fresh) (?:chat|conversation)|start over|forget everything|"
                            r"(?:clear|reset|delete|wipe|erase)(?: out)? (?:your |the |this |our |my )?(?:memory|chat|conversation|history)")
@@ -69,6 +70,7 @@ def _handle_one(query, ask):
     from JarvisAdvancedBot.LocalBrain import LocalReply, normalize
     command = query.lower().replace("jarvis", "").strip()
     polite = normalize(query)                           # "ok can you clear the chat, please" -> "clear the chat"
+    polite = GREETING_LEAD.sub("", polite)              # "hello start a new chat" -> "start a new chat"
 
     if len(query) < 3:
         return None
@@ -76,7 +78,7 @@ def _handle_one(query, ask):
     if STOP_COMMAND.fullmatch(command):
         Speak("Goodbye, sir.")
         return "quit"
-    if SLEEP_COMMAND.fullmatch(command):
+    if SLEEP_COMMAND.fullmatch(command) or SLEEP_COMMAND.fullmatch(polite):
         Speak("Going to sleep, sir. Say a wake word when you need me.")
         return "sleep"
 
