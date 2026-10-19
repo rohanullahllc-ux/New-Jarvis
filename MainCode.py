@@ -21,9 +21,12 @@ PERSONAL_DATA = re.compile(r"(?=.*\b(?:my|today'?s|tomorrow'?s|today|tomorrow|to
                            r"(?=.*\b(?:to[- ]?do|todo|tasks?|schedule[ds]?|reminders?|time ?table|appointments?|calendar|list)\b)", re.I)
 EDIT_DATA = re.compile(r"(?=.*\b(?:clear|delete|remove|erase|wipe|cross off|tick off|mark)\b)"
                        r"(?=.*\b(?:notes?|tasks?|to[- ]?do|todo|list|reminders?)\b)", re.I)
+DELETE_THINGS = re.compile(r"(?=.*\b(?:delete|remove|erase|wipe|uninstall|format)\b)"
+                           r"(?=.*\b(?:files?|folders?|documents?|photos?|pictures?|downloads?|apps?|programs?|videos?|songs?|screenshots?|"
+                           r"history|cache|drive|disk)\b)", re.I)
 SLEEP_COMMAND = re.compile(r"(?:you can )?(?:go to |take (?:a )?)?(?:sleep|rest)(?: mode)?(?: now)?")
 GREETING_LEAD = re.compile(r"(?:hello|hi|hey|ok|okay|alright|please)[ ,]+(?=\S)")
-STOP_COMMAND = re.compile(r"(?:(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?(?: exit)?"
+STOP_COMMAND = re.compile(r"(?:you can |you may |go ahead and )?(?:(?:quit|exit|terminate|good ?bye|bye)(?: jarvis)?(?: exit)?"
                           r"(?: (?:the |this |your )?(?:program|application|app|jar|jarvis|yourself|assistant)(?: application)?)?"
                           r"|(?:close|stop|end|shut down|turn off)(?: exit)? (?:the |this |your )?(?:program|application|jar|yourself|jarvis application))")
 RESET_COMMAND = re.compile(r"(?:start (?:a )?)?(?:new|fresh) (?:chat|conversation)|start over|forget everything|"
@@ -114,6 +117,11 @@ def _handle_one(query, ask):
         transcript.source("fallback")
         Speak("Sorry sir, I couldn't make that out, so I haven't changed anything. Try: clear all notes, clear all tasks, "
               "remove task 2, remove buy bread from my to do list, or delete the last note.")
+        return None
+    if reply is None and DELETE_THINGS.match(query):
+        transcript.source("fallback")
+        Speak("Sorry sir, I can't delete files, folders or programs, and I haven't touched anything. That is too risky to do by "
+              "voice. I can clear your notes and your to-do list if you like.")
         return None
     if reply is None and PERSONAL_DATA.match(query):
         transcript.source("fallback")

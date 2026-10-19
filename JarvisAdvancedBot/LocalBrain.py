@@ -245,13 +245,16 @@ def reminder(m, ask):
 
 
 TODO = r"(?:to ?do|to-do|todo|task)s?(?: list)?"
-FINISHED = re.compile(r"(?:done|finished|that'?s all|that is all|that'?s it|no more|nothing|nothing else|stop|no|nope|enough)")
+FINISHED = re.compile(r"(?:(?:i am|i'm|im|we are|we're|that is|that's|thats|all|it is|it's) )?(?:done|finished|complete|completed|set)"
+                      r"(?: now| for now| for today| with (?:the |my )?(?:list|tasks))?"
+                      r"|(?:that is|that's|thats) (?:all|it)(?: for now| for today)?|(?:no|nothing)(?: more| else)?|nope|stop|enough|end|i am|i'm|im")
 
 
 @intent(rf"^(?:make|create|start|build|prepare|set up|write)(?: me)?(?: a| my)?(?: new)? (?:(?:to ?do|to-do|todo)(?: list)?|tasks? list)(?: this| just)?(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?(?:\b.*)?$")
 def make_todo_list(m, ask):
     """Take the tasks one at a time. A task said with a time ("call Ali at 5 pm") also gets a reminder at that time."""
-    day = _day_from_word(m["day"] or "today")
+    named = m["day"] or (DAY_WORDS.search(m.string).group(1) if DAY_WORDS.search(m.string) else "")
+    day = _day_from_word(named or "today")
     added = []
     question = "Okay sir. You can add a time, like: call Ali at 5 pm. Say done when you have finished. What is the first task?"
     while len(added) < 20:
@@ -260,7 +263,7 @@ def make_todo_list(m, ask):
         if not spoken or FINISHED.fullmatch(spoken):
             break
         clock = _clock_time(spoken)
-        task = _as_typed(re.sub(r"\s+(?:at|for)\s+\d.*$", "", spoken).strip()) if clock else answer
+        task = Frames.tidy_task(_as_typed(re.sub(r"\s+(?:at|for)\s+\d.*$", "", spoken).strip()) if clock else answer)
         T.add_task(task, day)
         if clock:
             T.set_reminder(message=task, at_time=clock)
@@ -274,7 +277,10 @@ def make_todo_list(m, ask):
 @intent(rf"^(?:add|put|write) (?P<task>.+?) (?:to|on|in|into) (?:my |the )?{TODO}$",
         r"^(?:add|new|create|schedule|make|set up) (?:me )?(?:a |an )?(?:new )?task(?: to do)?[:,]?\s*(?P<task>.*)$")
 def add_task(m, ask):
-    task = _as_typed(m["task"].strip()) or ask("What's the task?")
+    task = _as_typed(m["task"].strip())
+    if re.match(r"(?:to|for|on|in|into|at)\b", task):        # "to my tutori": a sentence that stopped, not a task
+        task = ""
+    task = Frames.tidy_task(task) if task else ask("What's the task?")
     return T.add_task(task) + "." if task else "Okay, nothing added."
 
 
@@ -449,8 +455,9 @@ def delete_one_note(m, ask):
     return _delete_note(ask, title=(m.groupdict().get("title") or "").strip())
 
 
-def _delete_note(ask, which="last", number=0, title=""):
-    """Delete one note (the newest, the oldest, the Nth newest, or the one a few words point to) after a yes."""
+def _delete_note(ask, which="last", number=0, title="", count=1):
+    """Delete one note (the newest, the oldest, the Nth newest, or the one a few words point to) after a yes; ``count`` newest
+    (or oldest) notes when more than one is asked for."""
     from JarvisAdvancedBot.tools import productivity
     notes = productivity.pick_notes("all")                 # oldest first
     if title:
@@ -460,13 +467,15 @@ def _delete_note(ask, which="last", number=0, title=""):
             return f"There is no note number {number}; you have {len(notes)}."
         chosen = [notes[-number]]                          # note 1 is the newest, as in "Recent notes"
     else:
-        chosen = notes[:1] if which == "first" else notes[-1:]
+        chosen = (notes[:count] if which == "first" else notes[-count:][::-1])
     if not chosen:
         return "There are no saved notes to delete, sir."
-    if not _confirmed(ask, f"This will permanently delete the note {chosen[0].stem}. Say yes or no."):
-        return "Okay, I've kept it."
-    T.delete_notes("latest", chosen[0].stem, True)
-    return "Deleted that note, sir."
+    many = len(chosen) > 1
+    if not _confirmed(ask, f"This will permanently delete {'these ' + str(len(chosen)) + ' notes' if many else 'the note ' + chosen[0].stem}. Say yes or no."):
+        return "Okay, I've kept " + ("them." if many else "it.")
+    for note in chosen:
+        T.delete_notes("latest", note.stem, True)
+    return f"Deleted {len(chosen)} notes, sir." if many else "Deleted that note, sir."
 
 
 def _clear_what(ask):
@@ -514,12 +523,17 @@ def _by_frame(text, ask):
     if "note" in nouns:
         if frame.which == "text":
             return _delete_note(ask, title=frame.text)
-        return _delete_note(ask, which=frame.which, number=frame.number)
+        return _delete_note(ask, which=frame.which, number=frame.number, count=frame.count)
     when = datetime.date.fromisoformat(day) if day else datetime.date.today()
     if frame.which in ("last", "first"):
         count = productivity.count_tasks(when)
         if not count:
             return f"The to-do list for {when:%A %d %B} is empty, sir."
+        if frame.count > 1:                                 # "remove the last two tasks": from the far end, so the numbers hold
+            wanted = min(frame.count, count)
+            replies = [(T.remove_task(count - k, day) if day else T.remove_task(count - k)) if frame.which == "last"
+                       else (T.remove_task(1, day) if day else T.remove_task(1)) for k in range(wanted)]
+            return " ".join(reply + "." for reply in replies)
         number = count if frame.which == "last" else 1
     elif frame.which == "number":
         number = frame.number

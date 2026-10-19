@@ -12,7 +12,7 @@ from typing import NamedTuple, Optional
 
 REMOVE = {"remove", "delete", "erase", "clear", "wipe", "cancel", "drop", "scrap", "discard", "kill", "empty", "uncheck",
           "complete", "completed", "finish", "finished"}
-ADD = {"add", "create", "make", "put", "insert", "write", "append", "new"}
+ADD = {"add", "added", "adding", "create", "make", "put", "insert", "write", "append", "new"}
 TASK = {"task", "tasks", "todo", "todos", "item", "items", "errand", "errands", "chore", "chores", "assignment", "assignments"}
 TASK_SLIPS = {"tas", "tusk", "tusks", "test", "tests", "text", "texts", "taste", "tasked"}     # how "task" is often heard
 NOTE = {"note", "notes", "memo", "memos"}
@@ -44,10 +44,11 @@ _PHRASES = [(re.compile(p), r) for p, r in (
 class Frame(NamedTuple):
     action: str                       # "remove" or "add"
     nouns: frozenset                  # {"task"}, {"note"}, both, or none were named
-    which: str                        # "all", "last", "first", "number", "text", or "" when nothing says which
+    which: str                        # "all", "list", "last", "first", "number", "text", or "" when nothing says which
     number: int                       # 1-based, when which == "number"
     text: str                         # the words of the item, when which == "text" (or what to add)
     day: str                          # "today", "tomorrow", a weekday name, or ""
+    count: int = 1                    # "the last TWO tasks": how many, when which is "last" or "first"
 
 
 def _number(token, before):
@@ -62,21 +63,41 @@ def _number(token, before):
     return 0
 
 
+def _count(token):
+    return int(token) if token.isdigit() and 0 < int(token) <= 50 else CARDINALS.get(token, 0)
+
+
+PRONOUNS = re.compile(r"^(?:(?:and|also|then|next|add|ok|okay|um|uh|at|so|that|to do|todo)\s+)*"
+                      r"(?:(?:i will|i'll|i am going to|i'm going to|i have to|i need to|i must|i should|i want to|i would like to|"
+                      r"we will|we need to|let me|remind me to|to)\s+)?")
+
+
+def tidy_task(text):
+    """A task as it was said, without the speech around it: "at call ali" / "i will call ali" -> "call ali"."""
+    cleaned = text.strip()
+    for _ in range(3):
+        cleaned = PRONOUNS.sub("", cleaned, count=1).strip()
+    return cleaned or text.strip()
+
+
 def parse(text) -> Optional[Frame]:
     """The parts of a request to add or remove something from the to-do list or the notes; None if it is not that kind of request."""
     spoken = text.lower()
     for pattern, replacement in _PHRASES:
         spoken = pattern.sub(replacement, spoken)
     words = re.findall(r"#\d+|[a-z0-9]+(?:'[a-z]+)?", spoken)
+    if words and words[0] == "at":
+        words[0] = "add"                                     # "add" is very often heard as "at"
     verb_at = next((i for i, w in enumerate(words) if w in REMOVE or w in ADD), None)
     if verb_at is None or verb_at > 7 or any(w not in LEAD for w in words[:verb_at]):
         return None                                          # it has to be said as an instruction, not mentioned in passing
     action = "remove" if words[verb_at] in REMOVE else "add"
     rest = words[verb_at + 1:]
-    nouns, number, which, day, used = set(), 0, "", "", set()
+    nouns, number, which, day, count, used = set(), 0, "", "", 1, set()
     weak = set()
     for i, w in enumerate(rest):
         before = rest[i - 1] if i else ""
+        after = rest[i + 1] if i + 1 < len(rest) else ""
         if w in TASK or (w == "do" and before == "to"):
             nouns.add("task"); used.add(i)
         elif w in NOTE:
@@ -91,33 +112,41 @@ def parse(text) -> Optional[Frame]:
             day = w; used.add(i)
         elif w in EVERY:
             which = "all"; used.add(i)
-        elif w in LAST and which != "all":
-            which = "last"; used.add(i)
-        elif _number(w, before) and which not in ("all",):
-            number, which = _number(w, before), ("first" if w == "first" else "number"); used.add(i)
-        elif w == "oldest" and which != "all":
-            which = "first"; used.add(i)
+        elif (w in LAST or w in ("first", "oldest")) and which != "all":
+            which = "last" if w in LAST else "first"; used.add(i)
+            if _count(after) and action == "remove":
+                count = _count(after); used.add(i + 1)       # "the last two tasks"
+            elif w == "first":
+                number = 1
+        elif i not in used and _number(w, before) and which not in ("all",):
+            number, which = _number(w, before), "number"; used.add(i)
     if not nouns and which in ("number", "last", "first", "all"):
         nouns = weak                                         # "remove the last test": "test" can only be "task" here
     elif not nouns and action == "add":
         nouns = weak
     if not nouns and not which and action == "add":
         return None
-    if which == "first" and number == 1:
-        which = "first"
-    left = [w for i, w in enumerate(rest) if i not in used and w not in FILLER and w not in REMOVE and w not in ADD
-            and w not in TASK_SLIPS and w not in NOTE_SLIPS]
-    item = " ".join(left)
-    if not which and item:
+    skip = FILLER | {"another", "new", "next", "add", "added", "adding"}
+    if action == "add":                                      # what to add: everything between the first and last meaningful word
+        meaningful = [i for i, w in enumerate(rest) if i not in used and w not in skip and w not in TASK_SLIPS and w not in NOTE_SLIPS]
+        item = tidy_task(" ".join(rest[meaningful[0]:meaningful[-1] + 1])) if meaningful else ""
+        if item and not (nouns & {"task"}) and "note" not in nouns:
+            item = ""
+    else:
+        left = [w for i, w in enumerate(rest) if i not in used and w not in FILLER and w not in REMOVE and w not in ADD
+                and w not in TASK_SLIPS and w not in NOTE_SLIPS]
+        item = " ".join(left)
+    if not which and item and action == "remove":
         which = "text"
     elif not which and action == "remove" and nouns:
-        collection = {"tasks", "notes", "todos", "items", "memos", "errands", "chores", "list"} & set(rest)             or "todo" in rest or ("to" in rest and "do" in rest)
+        collection = {"tasks", "notes", "todos", "items", "memos", "errands", "chores", "list"} & set(rest) \
+            or "todo" in rest or ("to" in rest and "do" in rest)
         which = ("list" if "task" in nouns else "all") if collection else "last"      # "clear my to do list" is that day's list
     if action == "remove" and not nouns and not which:
         return None
-    if action == "add" and which not in ("", "text"):
-        return None
-    return Frame(action, frozenset(nouns), which, number, item if which == "text" or action == "add" else "", day)
+    if action == "add":
+        which = "text" if item else ""
+    return Frame(action, frozenset(nouns), which, number, item if which == "text" else "", day, count)
 
 
 # ---------------------------------------------------------------- number words

@@ -254,6 +254,19 @@ class DispatcherTests(unittest.TestCase):
             outcome = MainCode.handle_command(text, ask=lambda question: "")
         return outcome, spoken, reply, reset
 
+    def test_the_chat_model_never_gets_to_pretend_it_deleted_something(self):
+        for phrase, words in (("remove file test", "can't delete files"), ("delete the downloads folder", "can't delete files"),
+                              ("please uninstall the program", "can't delete files"), ("erase the reminders from yesterday", "haven't changed anything")):
+            outcome, spoken, _, _ = self.handle(phrase, chat=["Sure, I deleted it."])
+            self.assertIsNone(outcome, phrase)
+            self.assertIn(words, " ".join(spoken), phrase)
+            self.chat_asked.assert_not_called()
+
+    def test_you_can_quit_the_program_quits(self):
+        for phrase in ("you can quit the program", "quit the program", "you may exit", "can you exit the program"):
+            outcome, spoken, _, _ = self.handle(phrase, chat=["I'm ready to help."])
+            self.assertEqual(outcome, "quit", phrase)
+
     def test_unknown_commands_get_an_honest_answer_that_helps(self):
         with mock.patch("JarvisAdvancedBot.FreeBrain.answer", return_value=None),                 mock.patch("JarvisAdvancedBot.FreeBrain.available", return_value=False):
             outcome, spoken, _, _ = self.handle("kalkulator please")

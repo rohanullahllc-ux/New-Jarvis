@@ -1032,6 +1032,44 @@ class SlightlyDifferentWordingTests(BrainCase):
         self.routes("remove number 1", "delete_notes", "latest", "n2", True, answers=["yes"])
 
 
+class SecondRoundOfRecordedIssuesTests(SlightlyDifferentWordingTests):
+    """What went wrong in the next real testing session."""
+
+    def test_i_am_done_ends_the_list_instead_of_becoming_a_task(self):
+        for done in ("i am done", "Done", "that's all", "i'm finished", "nothing more", "i am", "all done now", "that is it for now"):
+            reply = self.say("create a to do list", answers=["bring eggs tonight", done])
+            self.assertEqual([c[1][0] for c in self.calls if c[0] == "add_task"], ["bring eggs tonight"], done)
+            self.assertIn("I added 1 task", reply, done)
+
+    def test_tasks_are_tidied_and_a_time_in_them_sets_a_reminder(self):
+        self.say("can you create a to do list for my all task", answers=["at call ali at 5:00 p.m.", "i will bring eggs tonight", "done"])
+        self.assertEqual([c[1][0] for c in self.calls if c[0] == "add_task"], ["call ali", "bring eggs tonight"])
+        self.assertIn(("set_reminder", (), {"message": "call ali", "at_time": "17:00"}), self.calls)
+
+    def test_a_day_named_anywhere_in_the_sentence_is_used(self):
+        self.say("create a new to do list for my test for tomorrow", answers=["write the program", "done"])
+        self.assertEqual(self.calls[0], ("add_task", ("write the program", L._day_from_word("tomorrow")), {}))
+
+    def test_the_last_two_tasks_are_removed_from_the_far_end(self):
+        self.say("remove the last two task")
+        self.assertEqual(self.calls, [("remove_task", (3,), {}), ("remove_task", (2,), {})])
+        self.say("remove the first two tasks")
+        self.assertEqual(self.calls, [("remove_task", (1,), {}), ("remove_task", (1,), {})])
+
+    def test_the_last_two_notes_are_deleted_after_one_yes(self):
+        self.say("delete the last two notes", answers=["yes"])
+        self.assertEqual(self.questions, ["This will permanently delete these 2 notes. Say yes or no."])
+        self.assertEqual(self.calls, [("delete_notes", ("latest", "n2", True), {}), ("delete_notes", ("latest", "n1", True), {})])
+
+    def test_added_to_do_that_i_will_do_something_adds_that_task(self):
+        for phrase in ("ok added to do that i will complete my homework by tonight", "at complete my homework by tonight to my to do list"):
+            self.routes(phrase, "add_task", "complete my homework by tonight")
+
+    def test_a_task_sentence_that_stopped_halfway_asks_what_the_task_is(self):
+        self.routes("can you add a task to my tutori", "add_task", "write notes", answers=["write notes"])
+        self.assertEqual(self.questions, ["What's the task?"])
+
+
 class RewordedCommandTests(SlightlyDifferentWordingTests):
     """More ways of saying the same things (the setUp gives it three notes and three tasks)."""
 
