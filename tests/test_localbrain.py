@@ -860,6 +860,39 @@ class RealSessionReviewTests(BrainCase):
         self.routes("can you tell me the password for khalil", "get_saved_wifi_password", "khalil")
         self.assertIn("python gate.py --set-password", self.say("what's the password of jarvis"))
 
+    def test_a_to_do_list_can_be_asked_for_in_short_forms(self):
+        for phrase in ("make a to do this for today", "ok i said can you make to do just for today", "create a todo"):
+            self.assertEqual(self.no_tool(phrase, answers=["done"]), "Okay, no tasks added.", phrase)
+        self.routes("create a new task finish homework", "add_task", "finish homework")        # still one task
+
+    def test_a_sentence_is_never_typed_into_the_start_menu(self):
+        for phrase in ("open the task so that i can chat to do list", "open the thing that i wanted to see yesterday"):
+            self.assertIsNone(self.no_tool(phrase), phrase)
+        self.routes("open chrome", "open_app", "chrome")
+
+    def test_start_taking_notes_asks_what_to_write(self):
+        self.routes("start taking notes", "take_note", "buy milk", answers=["buy milk"])
+        self.assertEqual(self.questions, ["Okay sir. What should the note say?"])
+        self.assertEqual(self.no_tool("start taking notes", answers=[""]), "Okay, no note then.")
+
+    def test_every_way_of_asking_for_the_networks_in_range_lists_them(self):
+        shown = SimpleNamespace(stdout="SSID 1 : BASEMENT\n")
+        for phrase in ("can you list all wi-fi network", "scan for wifi networks", "show wifi networks nearby"):
+            with mock.patch("subprocess.run", return_value=shown):
+                self.assertEqual(self.no_tool(phrase), "I can see 1 Wi-Fi network: BASEMENT.", phrase)
+
+    def test_all_of_them_shows_every_saved_wifi_password_on_screen(self):
+        with mock.patch.object(L, "_saved_wifi_names", return_value=["Home", "Office"]):
+            self.say("saved wifi passwords", answers=["all of them"])
+        self.assertEqual([c[1] for c in self.calls if c[0] == "get_saved_wifi_password"], [("",), ("Home",), ("Office",)])
+
+    def test_a_network_name_with_a_typo_finds_the_saved_network(self):
+        with mock.patch.object(L, "_saved_wifi_names", return_value=["Student_Wifi", "khalil", "BASEMENT"]):
+            self.routes("can you tell me password for khali", "get_saved_wifi_password", "khalil")
+            self.routes("what's the wifi password of basment", "get_saved_wifi_password", "BASEMENT")
+            self.say("give me a strong password for gmail")
+        self.assertIn("generate_password", [c[0] for c in self.calls])
+
     def test_an_answer_that_is_not_a_link_cancels_the_download(self):
         reply = self.no_tool("can you download a youtube video", answers=["can you give me a business name"])
         self.assertIn("cancelled the download", reply)

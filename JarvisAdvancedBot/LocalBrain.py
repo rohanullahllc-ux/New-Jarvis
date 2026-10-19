@@ -243,7 +243,7 @@ TODO = r"(?:to ?do|to-do|todo|task)s?(?: list)?"
 FINISHED = re.compile(r"(?:done|finished|that'?s all|that is all|that'?s it|no more|nothing|nothing else|stop|no|nope|enough)")
 
 
-@intent(rf"^(?:make|create|start|build|prepare|set up|write)(?: me)?(?: a| my)?(?: new)? (?:to ?do|to-do|todo|task)s? list(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?(?:\b.*)?$")
+@intent(rf"^(?:make|create|start|build|prepare|set up|write)(?: me)?(?: a| my)?(?: new)? (?:(?:to ?do|to-do|todo)(?: list)?|tasks? list)(?: this| just)?(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?(?:\b.*)?$")
 def make_todo_list(m, ask):
     """Take the tasks one at a time. A task said with a time ("call Ali at 5 pm") also gets a reminder at that time."""
     day = _day_from_word(m["day"] or "today")
@@ -385,6 +385,12 @@ def forget_one_fact(m, ask):
 
 # ---------------------------------------------------------------- notes, password, jokes, screenshot
 
+@intent(r"^(?:start|begin|resume)(?: taking| writing| making)(?: some| a)? notes?$")
+def start_notes(m, ask):
+    text = ask("Okay sir. What should the note say?").strip()
+    return T.take_note(text) + "." if text else "Okay, no note then."
+
+
 @intent(r"^(?:clear|delete|erase|remove|wipe)(?: all)?(?: of)?(?: my| the)?(?: saved)? notes$")
 def clear_notes(m, ask):
     from JarvisAdvancedBot.tools._common import folder
@@ -424,6 +430,15 @@ def read_notes(m, ask):
     title = re.sub(r".*?\bnotes?\b(?: (?:about|called|named|on))?\s*", "", m.string, count=1).strip()
     title = "" if re.fullmatch(r"(?:do i have|i have|do i|i)?(?: any)?", title) else title
     return _sentences(T.read_notes(title), 4)
+
+
+@intent(r"\bpassword (?:for|of) (?!(?:jarvis|program|app|assistant|computer|pc|laptop|account|email|windows|login|screen|system|it)\b)(?:the |my )?(?P<name>[\w .-]+?)(?: wi-?fi| network)?$")
+def wifi_password_by_name(m, ask):
+    names = _saved_wifi_names()
+    close = difflib.get_close_matches(m["name"].strip().lower(), [n.lower() for n in names], n=1, cutoff=0.6)
+    if not close:
+        return None                                       # not a saved network: the other password rules decide
+    return T.get_saved_wifi_password(next(n for n in names if n.lower() == close[0]))
 
 
 @intent(r"^(?!.*\b(?:generate|create|make|give me|new|random|strong|good|best|safe|secure|suggest|wi-?fi|e-?mail|gmail|facebook|"
@@ -976,9 +991,10 @@ def email(m, ask):
 
 
 @intent(r"\b(?:available|nearby|around|in range|visible) wi-?fi(?: networks| connections| names)?\b",
-        r"\bwi-?fi (?:networks|connections|names) (?:available|nearby|around|in range)\b")
+        r"\bwi-?fi (?:networks?|connections?|names?) (?:available|nearby|around|in range)\b",
+        r"\b(?:list|show|scan|find|see|check|get|search)\b.*\bwi-?fi(?: networks?| connections?| names?)?\b")
 def wifi_in_range(m, ask):
-    if re.search(r"\bpas\w*", m.string):
+    if re.search(r"\b(?:pas\w*|saved|known|stored|my|current|connected)\b", m.string):
         return None                                       # the password handler answers both
     import subprocess
     try:
@@ -990,6 +1006,26 @@ def wifi_in_range(m, ask):
     if not names:
         return "I can't see any Wi-Fi networks right now, sir. The Wi-Fi may be off, or this PC has no Wi-Fi adapter."
     return f"I can see {len(names)} Wi-Fi network{'' if len(names) == 1 else 's'}: " + ", ".join(names[:10]) + "."
+
+
+def _saved_wifi_names():
+    from JarvisAdvancedBot.tools import world
+    try:
+        return re.findall(r"^[ \t]*[^:\n]*Profile[^:\n]*:[ \t]*(.+?)[ \t]*$", world._netsh("show", "profiles"), flags=re.M)
+    except ToolError:
+        return []
+
+
+def _all_wifi_passwords():
+    """Each saved network's password goes to the screen (never aloud); the last one is left on the clipboard."""
+    shown = 0
+    for name in _saved_wifi_names():
+        try:
+            T.get_saved_wifi_password(name)
+            shown += 1
+        except ToolError:
+            continue
+    return f"I put {shown} Wi-Fi password{'' if shown == 1 else 's'} on your screen. I don't read passwords aloud."
 
 
 @intent(r"\bwi-?fi\b.*\bpas\w*", r"\bpas\w*\b.*\bwi-?fi\b", r"\b(?:saved|known|stored|my) wi-?fi (?:networks|connections|names)\b")
@@ -1004,9 +1040,12 @@ def wifi(m, ask):
             joined = None
         name = joined.group(1) if joined else ""
     if not name:
-        name = ask(T.get_saved_wifi_password("")).strip()          # lists the saved networks, then asks which
+        listing = T.get_saved_wifi_password("").replace("Tell me which one you want the password for.", "Which one do you want the password for, or all of them?")
+        name = ask(listing).strip()                                 # lists the saved networks, then asks which
         if not name:
             return "Okay, never mind."
+        if re.fullmatch(r"(?:all|all of them|every one|everyone|every network|each one|all networks)", normalize(name)):
+            return _all_wifi_passwords()
     reply = T.get_saved_wifi_password(name)
     if re.search(r"\b(?:available|nearby|in range)\b", m.string):
         reply += " " + (wifi_in_range(re.search(r"", "available"), ask) or "")
@@ -1059,6 +1098,8 @@ WEBSITES = {
 @intent(r"^(?:open|launch|start|run) (?:the |my )?(?P<name>.+?)(?: app| application| website| site| for me)?$")
 def open_something(m, ask):
     name = m["name"].strip()
+    if len(name.split()) > 3 or re.search(r"\b(?:so that|i can|that i|to do|chat|taking|writing)\b", name):
+        return None                                      # a sentence, not the name of an app: it is for the chat brain
     if name in WEBSITES or re.search(r"\.\w{2,}$", name):
         T.open_website(WEBSITES.get(name, name))
     else:
