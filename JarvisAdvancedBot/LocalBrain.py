@@ -248,7 +248,7 @@ def make_todo_list(m, ask):
     """Take the tasks one at a time. A task said with a time ("call Ali at 5 pm") also gets a reminder at that time."""
     day = _day_from_word(m["day"] or "today")
     added = []
-    question = "Okay sir. What is the first task? You can add a time, like: call Ali at 5 pm. Say done when you have finished."
+    question = "Okay sir. You can add a time, like: call Ali at 5 pm. Say done when you have finished. What is the first task?"
     while len(added) < 20:
         answer = ask(question).strip()
         spoken = normalize(answer)
@@ -260,7 +260,7 @@ def make_todo_list(m, ask):
         if clock:
             T.set_reminder(message=task, at_time=clock)
         added.append(f"{task} at {clock}" if clock else task)
-        question = "Added. Next task, or say done."
+        question = "Added. What is the next task, or are you done?"
     if not added:
         return "Okay, no tasks added."
     return f"Done sir. I added {len(added)} task{'' if len(added) == 1 else 's'}: " + "; ".join(added) + "."
