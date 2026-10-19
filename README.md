@@ -40,6 +40,8 @@ touch:
 | `TTS_ENABLED`, `TTS_VOICE` | Turn the spoken voice off (replies stay on screen), or choose a Windows voice such as Zira |
 | `TTS_VOLUME`, `TTS_RATE` | Voice volume (0 to 100) and speed (-10 slower to 10 faster) |
 | `MIC_PAUSE` | Seconds of silence that end a sentence (1.3). Raise it if Jarvis cuts you off while you think |
+| `SPEECH_LANGUAGE`, `SPEECH_LANGUAGE_FALLBACK` | The accent Google's speech recognition expects: `en-pk` (default), `en-in`, `en-us`, `en-gb`. Try another if Jarvis mishears you; the fallback is tried once when the first understood nothing |
+| `MIC_BEEP` | A short beep when the microphone has just been opened: it means "speak now" |
 | `STARTUP_GREETING` | `short` (one sentence), `full` (adds weather, time table, to-do list, low battery) or `silent` |
 | `GUI_ANIMATIONS` | `false` gives still pictures in the window on a slow PC |
 | `ANTHROPIC_API_KEY` | Optional. With it Jarvis uses Claude; without it, the free command understanding and chat below |
@@ -92,6 +94,21 @@ If Ollama isn't running, Jarvis falls back to the free key below (if you set one
 RAM after your last question), `CHAT_MEMORY_TURNS`, `CHAT_WEB_SEARCH`, `CHAT_PRELOAD` (load the model at start-up).
 The first question after the model has been idle can take 10 to 25 seconds while it loads; after that a reply starts
 within a few seconds.
+
+## How Jarvis listens
+
+* **The microphone stays open** between phrases (and is released after 45 idle seconds, or when the session ends), so the first word
+  of a command is never lost to a microphone that is still starting. After a fresh start there is a beep: speak after it.
+* **A sentence that stops in the middle is not the end.** If what you said ends with "can you add a", "remove the last" or
+  "tell me about the", Jarvis keeps listening (up to 4 seconds, twice) and joins the rest on.
+* **He does not listen to himself.** He waits until he has finished speaking (plus a third of a second for the echo), throws away
+  what the microphone heard while he talked, and ignores a phrase recorded while a reminder was speaking.
+* **Google's other guesses are used.** Speech recognition returns several possible sentences; Jarvis takes the first one he knows
+  as a command ("remove the last note" rather than "remove the last not"), then the best guess.
+* **A quiet voice is made louder** before it is sent, the loudness that counts as speech is kept within sensible limits, and the
+  room is measured again now and then or after three tries that heard nothing.
+* **He tells you why** when he heard something but could not make it out, or your voice is too quiet for the microphone.
+* Check the whole chain with `python microphone.py` (it asks you to say a sentence and shows the levels).
 
 ## Understanding loosely worded commands (a model you train yourself)
 

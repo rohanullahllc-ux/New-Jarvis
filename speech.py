@@ -29,11 +29,39 @@ _local = threading.local()
 _listeners = []          # extra places a reply should appear, e.g. the GUI's conversation pane
 _streaming = set()       # the listeners that also want to know whether a line starts a new message or continues one
 _say_lock = threading.Lock()
+_speaking = threading.Event()   # set while a sentence is being spoken: the microphone must not listen to Jarvis himself
+_last_spoken = [0.0]            # time.monotonic() when the last sentence ended
 _reported = set()        # voice problems already shown, so one broken voice doesn't repeat itself
 
 CHECK_SENTENCES = ("Testing, one, two, three.", "This is the second sentence, to prove that Jarvis keeps on speaking.",
                    "And a third.")
 CHECK_CHARACTERS_PER_SECOND = 25      # speech is slower than this, so a sentence that comes back faster was not spoken
+
+
+def is_speaking():
+    return _speaking.is_set()
+
+
+def quiet_for():
+    """Seconds since Jarvis last finished a sentence (0 while he is speaking; a very large number if he has not spoken)."""
+    if _speaking.is_set():
+        return 0.0
+    return time.monotonic() - _last_spoken[0] if _last_spoken[0] else 1e9
+
+
+def spoke_since(moment):
+    """True if Jarvis spoke, or is speaking, at any time after ``moment`` (a time.monotonic() value)."""
+    return _speaking.is_set() or _last_spoken[0] >= moment
+
+
+def wait_until_quiet(timeout=30.0, settle=0.35):
+    """Wait until Jarvis has stopped speaking, plus ``settle`` seconds for the room to stop echoing. True if it went quiet."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if not _speaking.is_set() and quiet_for() >= settle:
+            return True
+        time.sleep(0.03)
+    return False
 
 
 def _show(line):
@@ -103,9 +131,14 @@ def _say(text):
     """Speak ``text`` and wait until it has been said. Returns False if the voice failed."""
     try:
         with _say_lock:
-            voice = _voice()
-            voice.Rate = max(-10, min(10, (2 if len(text) > 30 else 0) + TTS_RATE))     # long replies a little faster
-            voice.Speak(text, 0)                # 0 = do not return until the whole sentence has been spoken
+            _speaking.set()
+            try:
+                voice = _voice()
+                voice.Rate = max(-10, min(10, (2 if len(text) > 30 else 0) + TTS_RATE))     # long replies a little faster
+                voice.Speak(text, 0)            # 0 = do not return until the whole sentence has been spoken
+            finally:
+                _last_spoken[0] = time.monotonic()
+                _speaking.clear()
         return True
     except Exception as error:
         _local.voice = None                     # start fresh next time rather than reusing a broken voice

@@ -258,6 +258,18 @@ class WinMMStream:
         del self._pending[:needed]
         return data
 
+    def flush(self, keep_seconds=0.0):
+        """Throw away audio recorded earlier than the last ``keep_seconds`` (for example what the microphone heard while Jarvis
+        was speaking), and keep the rest."""
+        while True:
+            try:
+                self._pending.extend(self._queue.get_nowait())
+            except queue.Empty:
+                break
+        keep = int(max(0.0, keep_seconds) * self.rate) * SAMPLE_WIDTH
+        if len(self._pending) > keep:
+            del self._pending[:len(self._pending) - keep]
+
     def close(self):
         """Release everything. Safe to call twice, and after a partly failed open."""
         if self._closed:

@@ -17,8 +17,8 @@ from PyQt5.QtCore import QObject, pyqtSignal
 import speech
 
 _STOP = object()
-LISTEN_TIMEOUT = 4            # hands-free: seconds to wait for speech to begin before checking for typed commands
-PHRASE_LIMIT = 10             # seconds of speech taken as one command
+LISTEN_TIMEOUT = 5            # hands-free: seconds to wait for speech to begin before checking for typed commands
+PHRASE_LIMIT = 20             # seconds of speech taken as one command (a pause ends it sooner; this only stops a very long one)
 
 
 class _Tee(io.TextIOBase):
@@ -55,6 +55,18 @@ def _default_run(listen, ask):
     return MainCode.taskExe(listen=listen, ask=ask)
 
 
+def _microphone_note():
+    """Why the last try at listening heard nothing useful, if the microphone module is loaded and has something to say."""
+    module = sys.modules.get("microphone")
+    return module.take_note() if module is not None else ""
+
+
+def _release_microphone():
+    module = sys.modules.get("microphone")
+    if module is not None:
+        module.close_microphone()                  # the Windows microphone light goes off when the session ends
+
+
 def _default_listen_voice(timeout, phrase_time_limit):
     from microphone import listen_voice
     return listen_voice(timeout=timeout, phrase_time_limit=phrase_time_limit)
@@ -81,6 +93,7 @@ class SessionController(QObject):
         self._voice_busy = threading.Lock()
         self._phase = "ended"                 # starting | waiting | working | ended
         self._listening = False
+        self._last_hint = -100.0
         self._state = "locked"
         self._state_lock = threading.Lock()
         self._speech_listener = self._on_speech
@@ -162,6 +175,7 @@ class SessionController(QObject):
             outcome = "error"
         finally:
             speech.remove_listener(self._speech_listener)
+            _release_microphone()
             self._phase = "ended"
             self._refresh()
             self.ended.emit(outcome)
@@ -211,7 +225,10 @@ class SessionController(QObject):
             self._listening = True
             self._refresh()
             try:
-                return self._listen_voice(timeout, phrase_limit)
+                text = self._listen_voice(timeout, phrase_limit)
+                if not text:
+                    self._say_why_nothing_was_heard()
+                return text
             except Exception as error:               # MicrophoneError, or anything a driver throws
                 self.problem.emit(f"I can't use the microphone: {error}")
                 if self._hands_free.is_set():
@@ -221,6 +238,13 @@ class SessionController(QObject):
             self._listening = False
             self._voice_busy.release()
             self._refresh()
+
+    def _say_why_nothing_was_heard(self):
+        """Tell the user when speech was heard but not understood, or was too quiet (at most once in twenty seconds)."""
+        note = _microphone_note()
+        if note and time.monotonic() - self._last_hint > 20:
+            self._last_hint = time.monotonic()
+            self.problem.emit(note)
 
     def _talk(self):
         text = self._capture(8, PHRASE_LIMIT, locked=True)           # talk() already took the microphone lock

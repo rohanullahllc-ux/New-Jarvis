@@ -1104,6 +1104,28 @@ class RewordedCommandTests(SlightlyDifferentWordingTests):
         self.assertTrue(self.say("is the laptop plugged in"))
 
 
+class IsCommandTests(BrainCase):
+    """LocalBrain.is_command chooses between the sentences speech recognition may have heard."""
+
+    def test_sentences_jarvis_would_act_on_are_commands(self):
+        for text in ("remove note number 2", "what time is it", "open task folder", "delete the last task", "clear all notes",
+                     "new chat", "show all available wifi networds", "tell me a joke", "take a screenshot", "add another task"):
+            self.assertTrue(L.is_command(text), text)
+
+    def test_questions_and_sentences_that_fit_every_pattern_are_not(self):
+        for text in ("why is the sky blue", "who painted the starry night", "open the sky blue", "play the thing", "what is a screenshot",
+                     "what is the difference between a comet and an asteroid", "", "can you"):
+            self.assertFalse(L.is_command(text), text)
+
+    def test_the_microphone_prefers_the_alternative_that_is_a_command(self):
+        import microphone
+        with mock.patch.dict(sys.modules, {"JarvisAdvancedBot.LocalBrain": L}):
+            self.assertIs(microphone._understanding(), L.is_command)
+            self.assertEqual(microphone._choose(["remove the last chat", "remove the last note", "remove the last nose"]),
+                             "remove the last note")
+            self.assertEqual(microphone._choose(["why is the sky blue", "wise the sky blue"]), "why is the sky blue")
+
+
 class ExplanationTests(BrainCase):
     def test_a_question_about_the_difference_between_things_is_left_for_the_chat_brain(self):
         for phrase in ("what is the difference between a comet and an asteroid", "what's the difference between weather and climate",

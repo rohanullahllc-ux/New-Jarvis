@@ -271,6 +271,50 @@ class VoiceTests(ControllerCase):
         self.assertIn("didn't hear", seen.problems[0])
         self.assertEqual(seen.heard, [])
 
+    def test_speech_that_was_heard_but_not_understood_is_explained_but_not_nagged_about(self):
+        notes = iter(["I heard you but couldn't make out the words. Please say it again, a little slower.", "second", "third"])
+        with mock.patch("gui.session._microphone_note", side_effect=lambda: next(notes, "")):
+            controller, seen = self.make()
+            controller.start()
+            wait_for(lambda: controller.state == "ready")
+            for _ in range(3):
+                controller._capture(1, 1)
+        self.assertEqual(seen.problems, ["I heard you but couldn't make out the words. Please say it again, a little slower."])   # (once in 20 s)
+
+    def test_nothing_is_said_when_the_microphone_has_nothing_to_report(self):
+        with mock.patch("gui.session._microphone_note", return_value=""):
+            controller, seen = self.make()
+            controller.start()
+            wait_for(lambda: controller.state == "ready")
+            controller._capture(1, 1)
+        self.assertEqual(seen.problems, [])
+
+    def test_the_microphone_is_released_when_the_session_ends(self):
+        with mock.patch("gui.session._release_microphone") as release:
+            controller, _ = self.make()
+            controller.start()
+            wait_for(lambda: controller.state == "ready")
+            controller.stop()
+            wait_for(lambda: controller.state == "locked")
+        release.assert_called()
+
+    def test_the_helpers_work_with_or_without_the_microphone_module_loaded(self):
+        import gui.session as session
+        fake = mock.Mock()
+        fake.take_note.return_value = "a note"
+        with mock.patch.dict(sys.modules, {"microphone": fake}):
+            self.assertEqual(session._microphone_note(), "a note")
+            session._release_microphone()
+        fake.close_microphone.assert_called_once()
+        with mock.patch.dict(sys.modules, {"microphone": None}):
+            self.assertEqual(session._microphone_note(), "")
+            session._release_microphone()
+
+    def test_a_long_sentence_is_allowed_and_a_slow_start_is_waited_for(self):
+        import gui.session as session
+        self.assertGreaterEqual(session.PHRASE_LIMIT, 15)
+        self.assertGreaterEqual(session.LISTEN_TIMEOUT, 5)
+
     def test_hands_free_keeps_listening_and_acts_on_what_it_hears(self):
         phrases = iter(["", "", "what time is it"])
         controller, seen = self.make(listen_voice=lambda timeout, limit: next(phrases, ""))

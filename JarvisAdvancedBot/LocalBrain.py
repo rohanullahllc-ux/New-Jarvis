@@ -1368,6 +1368,32 @@ def understands(text):
                               or any(pattern.search(wording) for pattern, handler in INTENTS if handler is not knowledge))
 
 
+GENERIC_HANDLERS = {"open_something", "close_something", "youtube_play", "google", "knowledge", "calculate", "wolfram"}
+
+
+def is_command(text):
+    """Would Jarvis act on this sentence? Used to choose, among the several things speech recognition may have heard, the one that
+    is a command ("remove the last note" rather than "remove the last not"). A pattern that fits almost any words ("open ...",
+    "play ...", "who is ...") does not count: it would make every guess look like a command."""
+    wording = _canonical(normalize(text))
+    if not wording or EXPLANATION.match(wording):
+        return False
+    if SESSION_WORDS.fullmatch(wording):
+        return True
+    handler = next((h for pattern, h in INTENTS if pattern.search(wording)), None)
+    if handler is not None and handler.__name__ not in GENERIC_HANDLERS:
+        return True
+    frame = Frames.parse(wording)
+    if frame is not None and (frame.nouns or frame.which == "all"):
+        return True
+    fixed = Frames.repair(wording, _command_words())
+    if fixed:
+        handler = next((h for pattern, h in INTENTS if pattern.search(fixed)), None)
+        if handler is not None and handler.__name__ not in GENERIC_HANDLERS:
+            return True
+    return NLU.interpret(wording) is not None
+
+
 def split_commands(text):
     """"schedule buy bread then what's on my list" as two commands, but only when every piece is one Jarvis understands;
     otherwise the text stays whole (so "tell me what happens then" is still one question)."""

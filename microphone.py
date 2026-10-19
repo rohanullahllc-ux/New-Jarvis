@@ -19,18 +19,26 @@ import argparse
 import queue
 import sys
 import threading
+import time
 
 import speech_recognition as sr
 
+import speech
 import winmm_mic
-from config import INPUT_MODE, MIC_BACKEND, MIC_DEVICE, MIC_PAUSE
+from config import INPUT_MODE, MIC_BACKEND, MIC_BEEP, MIC_DEVICE, MIC_PAUSE, SPEECH_LANGUAGE, SPEECH_LANGUAGE_FALLBACK
 from winmm_mic import MicrophoneError, WinMMMicrophone
 
 READ_TIMEOUT = 5       # seconds without audio before a backend is declared dead
 PROBE_TIMEOUT = 3      # the same, while checking a backend before first use
 SD_INIT_TIMEOUT = 6    # seconds sounddevice may take to start before we give up on it
 UNHEARD_LIMIT = 5      # this many empty tries in a row -> switch to typed input
-LANGUAGE = "en-pk"
+LANGUAGE = SPEECH_LANGUAGE
+SETTLE = 0.35          # seconds of quiet after Jarvis stops speaking before the microphone starts to listen (room echo)
+PRE_ROLL = 0.5         # seconds of audio from just before listening begins that are kept, so the first word is not lost
+CONTINUE_WAIT = 4.0    # after a sentence that sounds unfinished, how long to wait for the rest of it
+MAX_CONTINUATIONS = 2
+IDLE_RELEASE = 45      # seconds without listening before the microphone is released (so Windows' microphone light goes off)
+RECALIBRATE_EVERY = 600
 
 
 # ---------------------------------------------------------------- sounddevice backend
@@ -101,9 +109,20 @@ class _SoundDeviceStream:
     mode PortAudio pushes audio from its own thread and read() waits on the queue with a timeout.
     """
 
-    def __init__(self, raw, audio_queue, sample_width, timeout):
-        self.raw, self.queue, self.width, self.timeout = raw, audio_queue, sample_width, timeout
+    def __init__(self, raw, audio_queue, sample_width, timeout, rate=16000):
+        self.raw, self.queue, self.width, self.timeout, self.rate = raw, audio_queue, sample_width, timeout, rate
         self.buffer = bytearray()
+
+    def flush(self, keep_seconds=0.0):
+        """Throw away audio recorded earlier than the last ``keep_seconds``, and keep the rest."""
+        while True:
+            try:
+                self.buffer.extend(self.queue.get_nowait())
+            except queue.Empty:
+                break
+        keep = int(max(0.0, keep_seconds) * self.rate) * self.width
+        if len(self.buffer) > keep:
+            del self.buffer[:len(self.buffer) - keep]
 
     def read(self, frames):
         needed = frames * self.width
@@ -164,7 +183,7 @@ class SoundDeviceMicrophone(sr.AudioSource):
             raw.start()
         except Exception as e:
             raise MicrophoneError(f"sounddevice could not open the microphone ({e})") from e
-        self.stream = _SoundDeviceStream(raw, audio_queue, self.SAMPLE_WIDTH, self.read_timeout)
+        self.stream = _SoundDeviceStream(raw, audio_queue, self.SAMPLE_WIDTH, self.read_timeout, self.SAMPLE_RATE)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -296,9 +315,101 @@ def _unheard_try():
 def reset_microphone():
     """Forget past failures and try voice again (used by the GUI's mic button)."""
     global _active, _recognizer, _text_mode, _unheard
+    close_microphone()
     _failed.clear()
     _active, _recognizer, _unheard = None, None, 0
     _text_mode = INPUT_MODE == "text"
+
+
+# ---------------------------------------------------------------- the open microphone
+
+class _Held(sr.AudioSource):
+    """The microphone, kept open between phrases.
+
+    Opening a stream for every phrase meant the first fraction of a second of speech fell into the time the stream took to start,
+    so the first word of a command was often lost or half heard. Kept open, the microphone is already listening when you speak.
+    """
+
+    def __init__(self, source):
+        self._source = source
+        self.fresh = True                         # just opened: not warmed up yet
+
+    def __getattr__(self, name):                  # SAMPLE_RATE, SAMPLE_WIDTH, CHUNK, stream, device_name...
+        return getattr(self._source, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def flush(self, keep_seconds):
+        flush = getattr(getattr(self._source, "stream", None), "flush", None)
+        if flush:
+            flush(keep_seconds)
+
+    def close(self):
+        self._source.__exit__(None, None, None)
+
+
+_held = None
+_held_lock = threading.RLock()
+_idle_timer = None
+_calibration = {"at": 0.0, "base": 0.0, "misses": 0}
+last_note = ""             # why the last try heard nothing useful, in words for the user ("" if nothing to say)
+
+
+def _held_source():
+    """The open microphone (opened now if it is not)."""
+    global _held
+    with _held_lock:
+        if _held is None:
+            source = Microphone()
+            source.__enter__()
+            _held = _Held(source)
+        return _held
+
+
+def close_microphone():
+    """Release the microphone (the Windows microphone light goes off). Safe at any time."""
+    global _held, _idle_timer
+    with _held_lock:
+        held, _held = _held, None
+        timer, _idle_timer = _idle_timer, None
+    if timer is not None:
+        timer.cancel()
+    if held is not None:
+        try:
+            held.close()
+        except Exception:                          # noqa: BLE001 - a driver that is already gone is fine
+            pass
+
+
+def _keep_open():
+    """Listening has begun again: the microphone must not be released from under it."""
+    global _idle_timer
+    with _held_lock:
+        timer, _idle_timer = _idle_timer, None
+    if timer is not None:
+        timer.cancel()
+
+
+def _release_when_idle():
+    """Schedule the microphone to be released if nothing listens for a while (hands-free listening never leaves it idle)."""
+    global _idle_timer
+    with _held_lock:
+        if _idle_timer is not None:
+            _idle_timer.cancel()
+        _idle_timer = threading.Timer(IDLE_RELEASE, close_microphone)
+        _idle_timer.daemon = True
+        _idle_timer.start()
+
+
+def take_note():
+    """Why the last try heard nothing useful ("" when there is nothing to say); reading it clears it."""
+    global last_note
+    note, last_note = last_note, ""
+    return note
 
 
 # ---------------------------------------------------------------- listening
@@ -311,22 +422,207 @@ def _ensure_ready():
     print(": Starting the microphone, stay quiet for a second...")
     recognizer = sr.Recognizer()
     recognizer.pause_threshold = MIC_PAUSE          # a pause to think is not the end of the sentence (it was 1 s, and cut some off)
+    recognizer.non_speaking_duration = min(0.6, MIC_PAUSE)     # a little silence is kept either side of the words
+    recognizer.phrase_threshold = 0.2               # a short "yes" or "no" is a phrase, not a click
+    recognizer.operation_timeout = 12               # a stuck speech service must not freeze the session
     for _ in range(2):                  # the second pass runs after a failover
         try:
-            with Microphone() as source:
-                recognizer.adjust_for_ambient_noise(source, duration=1)
+            source = _held_source()
+            recognizer.adjust_for_ambient_noise(source, duration=1)
             _recognizer = recognizer
+            _calibration.update(at=time.monotonic(), base=recognizer.energy_threshold, misses=0)
+            _clamp_threshold()
             print(f": Microphone ready [{mic_status()}]. Say a wake word like 'hey jarvis'.")
             return True
         except (MicrophoneError, OSError) as e:
             print(f": Microphone problem: {e}")
+            close_microphone()
             if not _failover(e):
                 break
     return False
 
 
+def _clamp_threshold():
+    """Keep the loudness that counts as speech within sensible limits of the first measurement: a noisy minute must not leave
+    it so high that a normal voice is ignored (words skipped), or so low that the room itself is 'speech'."""
+    base = _calibration["base"] or _recognizer.energy_threshold
+    _recognizer.energy_threshold = min(max(_recognizer.energy_threshold, 60, base * 0.5), min(2500, base * 2.5))
+
+
+def _maybe_recalibrate(source):
+    """Measure the room again now and then, and after several tries in a row that heard nothing."""
+    due = time.monotonic() - _calibration["at"] > RECALIBRATE_EVERY or _calibration["misses"] >= 3
+    if not due:
+        _clamp_threshold()
+        return
+    before = _recognizer.energy_threshold
+    try:
+        _recognizer.adjust_for_ambient_noise(source, duration=0.6)
+    except (MicrophoneError, OSError):
+        return
+    _recognizer.energy_threshold = min(_recognizer.energy_threshold, before * 1.5)       # (someone may have spoken meanwhile)
+    _calibration.update(at=time.monotonic(), misses=0)
+    _clamp_threshold()
+
+
+def _beep():
+    try:
+        import winsound
+        winsound.Beep(1000, 60)
+    except Exception:                                # noqa: BLE001 - no sound device: the beep is only a convenience
+        pass
+
+
+def _prepare_to_listen(source):
+    """Before each phrase: let Jarvis finish speaking, drop what the microphone heard of him, keep the last moments before now."""
+    speech.wait_until_quiet(timeout=30, settle=SETTLE)
+    if getattr(source, "fresh", False):
+        source.fresh = False
+        for _ in range(max(1, int(0.3 * source.SAMPLE_RATE / source.CHUNK))):      # let a freshly opened device settle
+            source.stream.read(source.CHUNK)
+        if MIC_BEEP:
+            _beep()
+            time.sleep(0.12)
+        source.flush(0)
+    else:
+        source.flush(max(0.0, min(PRE_ROLL, speech.quiet_for() - SETTLE)))
+    _maybe_recalibrate(source)
+
+
 class _VoiceUnavailable(Exception):
     """Voice input can't be used right now; the message says why."""
+
+
+def _capture(timeout, phrase_time_limit):
+    """One phrase of audio, or None if nobody spoke within ``timeout`` seconds. Raises _VoiceUnavailable if the microphone fails."""
+    for attempt in range(3):
+        started = time.monotonic()
+        try:
+            source = _held_source()
+            _prepare_to_listen(source)
+            print(": Listening.....")
+            audio = _recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+        except sr.WaitTimeoutError:
+            return None
+        except (MicrophoneError, OSError) as e:
+            close_microphone()
+            if attempt < 2 and _failover(e):
+                continue                  # the other backend works: try the same listen again
+            raise _VoiceUnavailable(f"The microphone stopped working ({e}).") from None
+        if speech.spoke_since(started):
+            print(": (that was Jarvis's own voice, so I'm ignoring it)")        # e.g. a reminder spoke while the microphone was open
+            continue
+        return audio
+    return None
+
+
+def _louder(audio):
+    """The recording with its volume raised when the voice was quiet: a faint voice is where words go missing."""
+    try:
+        import audioop
+        loudest = audioop.max(audio.frame_data, audio.sample_width)
+        level = audioop.rms(audio.frame_data, audio.sample_width)
+        if 40 < level < 1500 and loudest:
+            gain = min(8.0, 3000 / level, 30000 / loudest)
+            if gain > 1.2:
+                return sr.AudioData(audioop.mul(audio.frame_data, audio.sample_width, gain), audio.sample_rate, audio.sample_width)
+    except Exception:                                # noqa: BLE001 - recognition still works on the recording as it was
+        pass
+    return audio
+
+
+def _alternatives(result):
+    """The different things Google thought it heard, best first, from a show_all result."""
+    found = result.get("alternative", []) if isinstance(result, dict) else []
+    texts = []
+    for entry in found:
+        text = (entry.get("transcript") or "").strip().lower()
+        if text and text not in texts:
+            texts.append(text)
+    return texts
+
+
+def _understanding():
+    """The function that says whether Jarvis would do something with a sentence, once the command brain is loaded (or None)."""
+    module = sys.modules.get("JarvisAdvancedBot.LocalBrain")
+    return getattr(module, "is_command", None)
+
+
+def _choose(alternatives):
+    """Of the possible sentences, the first one Jarvis would act on; the best guess otherwise. A command heard as another
+    word ("remove not number 2" for note) is put right by the alternative that makes sense."""
+    understand = _understanding()
+    if understand:
+        for text in alternatives[:6]:
+            try:
+                if understand(text):
+                    if text != alternatives[0]:
+                        print(f": (chose {text!r} over {alternatives[0]!r}: that is a command I know)")
+                    return text
+            except Exception:                        # noqa: BLE001 - a faulty check must not cost the user a command
+                break
+    return alternatives[0]
+
+
+def _noted(audio, why):
+    global last_note
+    seconds = len(audio.frame_data) / max(1, audio.sample_rate * audio.sample_width)
+    if why == "unclear" and seconds >= 1.0:
+        last_note = "I heard you but couldn't make out the words. Please say it again, a little slower."
+    elif why == "quiet":
+        last_note = "Your voice is very quiet for the microphone. Move closer, or raise the microphone volume in Windows."
+
+
+def _recognize(audio, language):
+    """The words in a recording: a string, None if nothing could be understood, "" if Google's speech service is out of reach."""
+    audio_loud = _louder(audio)
+    result = None
+    for attempt in range(2):
+        try:
+            print(": Recognizing.....")
+            result = _recognizer.recognize_google(audio_loud, language=language, show_all=True)
+            break
+        except sr.UnknownValueError:
+            result = []
+            break
+        except sr.RequestError as e:
+            if attempt == 0:
+                time.sleep(0.4)                       # a hiccup in the connection: one more go
+                continue
+            print(f": Speech service unavailable, check your internet ({e})")
+            return ""
+    alternatives = _alternatives(result)
+    seconds = len(audio.frame_data) / max(1, audio.sample_rate * audio.sample_width)
+    if not alternatives and seconds >= 0.8 and SPEECH_LANGUAGE_FALLBACK and SPEECH_LANGUAGE_FALLBACK != language:
+        try:
+            alternatives = _alternatives(_recognizer.recognize_google(audio_loud, language=SPEECH_LANGUAGE_FALLBACK, show_all=True))
+        except (sr.UnknownValueError, sr.RequestError):
+            alternatives = []
+    if not alternatives:
+        try:
+            import audioop
+            quiet = audioop.rms(audio.frame_data, audio.sample_width) < 40
+        except Exception:                            # noqa: BLE001
+            quiet = False
+        _noted(audio, "quiet" if quiet else "unclear")
+        _calibration["misses"] += 1
+        return None
+    _calibration["misses"] = 0
+    return _choose(alternatives)
+
+
+_UNFINISHED = {"to", "a", "an", "the", "and", "or", "of", "for", "from", "with", "my", "your", "in", "on", "at", "by", "if", "is",
+               "are", "into", "about", "as", "than", "then", "so", "but", "can", "could", "would", "will", "what", "how", "why",
+               "when", "where", "who", "which", "also", "just", "remove", "delete", "add", "open", "show", "tell", "make", "create",
+               "set", "take", "call", "find", "search", "write", "erase", "turn", "give", "send", "last", "first", "next", "previous",
+               "latest", "newest", "oldest", "second", "third", "every", "some", "any"}       # (not "it", "me", "you", "please"...:
+                                                                                                          # "what time is it" is finished)
+
+
+def _unfinished(text):
+    """True when a phrase ends in the middle of a thought ("can you add a", "remove the last"), so the rest is probably coming."""
+    words = text.lower().split()
+    return not words or words[-1] in _UNFINISHED or words[-1].isdigit() and len(words) == 1
 
 
 def _hear(language, timeout, phrase_time_limit):
@@ -334,32 +630,30 @@ def _hear(language, timeout, phrase_time_limit):
 
     Returns the lowercase words, None if nothing was understood, or "" if Google's speech service couldn't be
     reached. Raises _VoiceUnavailable if the microphone itself fails.
+
+    A phrase that stops in the middle of a thought ("can you add a") is not the end: the microphone keeps listening for the rest.
     """
     if not _ensure_ready():
         raise _VoiceUnavailable("The microphone isn't working.")
-    audio = None
-    for attempt in range(2):
-        try:
-            with Microphone() as source:
-                print(": Listening.....")
-                audio = _recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
-            break
-        except sr.WaitTimeoutError:
-            return None
-        except (MicrophoneError, OSError) as e:
-            if attempt == 0 and _failover(e):
-                continue                  # the other backend works: try the same listen again
-            raise _VoiceUnavailable(f"The microphone stopped working ({e}).") from None
-    try:
-        print(": Recognizing.....")
-        query = _recognizer.recognize_google(audio, language=language)
-    except sr.UnknownValueError:
+    _keep_open()
+    audio = _capture(timeout, phrase_time_limit)
+    if audio is None:
+        _release_when_idle()
         return None
-    except sr.RequestError as e:
-        print(f": Speech service unavailable, check your internet ({e})")
-        return ""
-    print(f": You Said: {query}")
-    return query.lower()
+    text = _recognize(audio, language)
+    for _ in range(MAX_CONTINUATIONS):
+        if not text or not _unfinished(text):
+            break
+        print(f": ({text!r} sounds unfinished, so I'm still listening...)")
+        more_audio = _capture(CONTINUE_WAIT, phrase_time_limit)
+        more = _recognize(more_audio, language) if more_audio is not None else None
+        if not more:
+            break
+        text = f"{text} {more}"
+    _release_when_idle()
+    if text:
+        print(f": You Said: {text}")
+    return text.lower() if text else text
 
 
 def listen(language=LANGUAGE, timeout=10, phrase_time_limit=8):
