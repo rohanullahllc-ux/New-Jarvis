@@ -59,4 +59,23 @@ QScrollBar::handle:vertical:hover {{ background: {ACCENT_DARK}; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QToolTip {{ background: {PANEL_ALT}; color: {TEXT}; border: 1px solid {ACCENT}; padding: 4px; }}
 QDialog {{ background: {BG}; }}
+QComboBox, QSpinBox, QDoubleSpinBox {{ background: #040c14; border: 1px solid {EDGE}; border-radius: 8px; padding: 6px 10px; min-height: 22px;
+                                      selection-background-color: {ACCENT_DARK}; }}
+QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {ACCENT}; }}
+QComboBox::drop-down {{ border: none; width: 24px; }}
+QComboBox QAbstractItemView {{ background: {PANEL}; border: 1px solid {EDGE}; selection-background-color: {ACCENT_DARK}; outline: none; }}
+QCheckBox {{ spacing: 8px; background: transparent; }}
+QCheckBox::indicator {{ width: 18px; height: 18px; border: 1px solid {EDGE}; border-radius: 4px; background: #040c14; }}
+QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
+QListWidget, QTableWidget {{ background: #040c14; border: 1px solid {EDGE}; border-radius: 10px; padding: 4px; gridline-color: #0b2233; outline: none; }}
+QListWidget::item {{ padding: 9px 10px; border-radius: 6px; }}
+QListWidget::item:selected {{ background: #0d2740; color: {ACCENT}; }}
+QTableWidget::item {{ padding: 4px; }}
+QTableWidget::item:selected {{ background: #0d2740; color: {TEXT}; }}
+QHeaderView::section {{ background: {PANEL_ALT}; color: {MUTED}; border: none; padding: 6px; }}
+QFrame#settingRow {{ background: {PANEL}; border: 1px solid {EDGE}; border-radius: 10px; }}
+QFrame#settingRow QLabel {{ background: transparent; }}
+QLabel#settingLabel {{ font-size: 11pt; }}
+QScrollArea {{ border: none; background: transparent; }}
+QMessageBox, QInputDialog {{ background: {BG}; }}
 """

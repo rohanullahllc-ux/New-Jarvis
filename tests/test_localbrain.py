@@ -20,6 +20,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from anthropic.lib.tools import ToolError  # noqa: E402
 from JarvisAdvancedBot import LocalBrain as L  # noqa: E402
 from JarvisAdvancedBot import tools as T  # noqa: E402
+from tests.isolation import isolated_database, no_personal_lists  # noqa: E402
+
+
+def setUpModule():
+    no_personal_lists()
+    isolated_database()
 
 
 class BrainCase(unittest.TestCase):

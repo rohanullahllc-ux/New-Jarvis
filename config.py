@@ -13,7 +13,7 @@ LOGS_DIR = BASE_DIR / "Logs"
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(BASE_DIR / ".env")
+    load_dotenv(BASE_DIR / ".env", interpolate=False)       # a value is taken literally: a password with ${...} in it stays as typed
 except ImportError:
     pass
 
@@ -53,6 +53,7 @@ def flag(name, default=True):
 
 # ---- Who and where ---------------------------------------------------------
 USER_NAME = key("USER_NAME", "Mr Khan")            # how Jarvis addresses you
+ADDRESS_AS = key("ADDRESS_AS", "sir")               # the short word in his replies ("Ok sir"): personal.py swaps it in for "sir"
 DEFAULT_CITY = key("DEFAULT_CITY", "Peshawar")      # used for weather when no city is named
 HOME_CURRENCY = key("HOME_CURRENCY", "PKR").upper() # "dollar rate" converts to this
 

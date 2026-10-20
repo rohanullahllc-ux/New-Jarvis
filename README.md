@@ -8,9 +8,22 @@ both Claude and the free built-in commands, a proper window, and a password in f
 
 ## Start it
 
+**On a new PC (or after reinstalling Windows): double-click `Setup-Jarvis.bat`.** It finds Python (or offers to install it), installs the libraries, downloads the
+voices and speech models, installs the chat model if you want it, asks how you like things (your name, voice, how to wake him, password...), can bring your old
+Jarvis back from a backup, and tries everything at the end. Run it again any time: it only does what is missing. Then start him with **`Start-Jarvis.bat`**, and change
+anything later in the **admin panel** (the ADMIN button, or `Admin-Panel.bat`). The whole story is in **[MANUAL.md](MANUAL.md)**.
+
+| Double-click | What it does |
+|---|---|
+| `Setup-Jarvis.bat` | The setup wizard (`python setup_jarvis.py`; add `--check` to only look, `--dry-run` to preview). |
+| `Start-Jarvis.bat` | Starts the Jarvis window. |
+| `Admin-Panel.bat` | The admin panel: every setting, your shortcuts and contacts, backup and restore. Asks for the password. |
+
+By hand, if you prefer:
+
 ```
 pip install -r requirements.txt          # Python 3.14 on Windows
-copy .env.example .env                   # then edit .env
+copy .env.example .env                   # then edit .env (or use the admin panel)
 python gate.py --set-password            # choose your unlock password (stored as a salted hash)
 ```
 
@@ -18,6 +31,10 @@ python gate.py --set-password            # choose your unlock password (stored a
 |---|---|
 | `python JarvisGUI.py` | The window. Works from anywhere, including VS Code's Run button. |
 | `python Startup.py` | The terminal. Say or type a wake word (`hey jarvis`, `wake up`), then the password. It needs a real terminal (in VS Code: Ctrl+`) because it asks for your password. |
+| `python JarvisAdmin.py` | The admin panel on its own. |
+
+**Documents:** [MANUAL.md](MANUAL.md) (how to use Jarvis, every command and setting, troubleshooting) · [CLAUDE.md](CLAUDE.md) and [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md)
+(for a new Claude session or a programmer: the rules, the map, how it works, how to extend it) · [ROADMAP.md](ROADMAP.md) (the plan) · [RESTORE.md](RESTORE.md) (setting up again by hand).
 
 Both ask for the password before anything starts, through the same module (`gate.py`). Nothing else starts a session.
 Say **sleep** to lock it again, **quit** to close it.
@@ -29,8 +46,10 @@ typed commands and says why.
 
 ## Settings (`.env`)
 
-Everything that varies lives in `.env` (see `.env.example` for every setting with its explanation). The ones you will
-touch:
+Everything that varies lives in `.env` (see `.env.example` for every setting with its explanation). The easy way to change them is the **admin
+panel** (ADMIN button, `Admin-Panel.bat`): plain labels, the right control for each, a search box, and a copy of the old file kept at every save. All 56 settings are listed with
+their usual values in [MANUAL.md](MANUAL.md) section 8; both that table and `.env.example` are written from `settings_registry.py` (`python settings_registry.py --write-example --write-manual`).
+The ones you will touch:
 
 | Setting | Meaning |
 |---|---|
@@ -265,6 +284,11 @@ Phrases are matched loosely; these are examples. Two commands can go in one brea
 ## How it is put together
 
 ```
+Setup-Jarvis.bat              the double-click setup (finds Python, runs setup_jarvis.py); Start-Jarvis.bat, Admin-Panel.bat start the window / the admin panel
+setup_jarvis.py, jarvis_setup/ the setup wizard: probes this PC, installs, downloads, asks your preferences, restores a backup (standard library only)
+settings_registry.py, envfile.py the list of every setting (writes .env.example and the manual's table); safe editing of .env
+JarvisAdmin.py, gui/admin_panel.py the admin panel; shortcuts.py, contacts.py your own shortcuts and contacts; backup_jarvis.py backup and restore
+personal.py, ui_bridge.py     "sir" -> what you chose; a message box from the session thread to the window
 Startup.py, JarvisGUI.py      the two launchers (both go through gate.py)
 gate.py                       password (salted hash) and the optional camera check
 transcript.py                 the private record of conversations (and python transcript.py to read it)
@@ -293,8 +317,9 @@ automatically.
 ## Tests
 
 ```
-python -m unittest discover -s tests            # offline: no microphone, speaker, network, camera or email
+python -m unittest discover -s tests            # offline: no microphone, speaker, network, camera or email (about 1,500 tests, 3 minutes)
 python tests/live_check.py                      # asks the real services; run it when something seems broken
+python setup_jarvis.py --check                  # looks at this PC and says what Jarvis still needs (changes nothing)
 ```
 
 Web services change. If a tool starts failing, `tests/live_check.py` shows which one, and the fix is in one file.

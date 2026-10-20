@@ -15,7 +15,6 @@ import getpass
 import hashlib
 import hmac
 import os
-import re
 import sys
 
 import config
@@ -74,16 +73,10 @@ def face_check(cancelled=None):
 
 
 def store_password(new_password, env_path=None):
-    """Save the hash of `new_password` to .env and clear any plain-text password."""
-    env_path = env_path or (BASE_DIR / ".env")
-    text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
-    for name, value in (("JARVIS_PASSWORD_HASH", hash_password(new_password)), ("JARVIS_PASSWORD", "")):
-        line = f"{name}={value}"
-        if re.search(rf"(?m)^{name}=.*$", text):
-            text = re.sub(rf"(?m)^{name}=.*$", lambda _: line, text)
-        else:
-            text = text.rstrip("\n") + f"\n{line}\n"
-    env_path.write_text(text, encoding="utf-8")
+    """Save the hash of `new_password` to .env and clear any plain-text password. (envfile.py keeps the rest of the file as it is,
+    writes it safely, and keeps a copy of the old one.)"""
+    from envfile import EnvFile
+    EnvFile(env_path or (BASE_DIR / ".env")).set_many({"JARVIS_PASSWORD_HASH": hash_password(new_password), "JARVIS_PASSWORD": ""})
 
 
 def _set_password_interactively():

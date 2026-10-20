@@ -1,5 +1,13 @@
 # ---- Secrets and per-machine configuration -------------------------------
 .env
+# the copies envfile.py keeps before every change, and any other .env of your own (.env.example stays in git)
+.env.bak-*
+.env.local
+# what the setup wizard remembers, and your own shortcuts, contacts and backups
+DataBase/setup_state.json
+DataBase/shortcuts.json
+DataBase/contacts.json
+Backups/
 
 # ---- Environments, caches, build output ----------------------------------
 .venv/

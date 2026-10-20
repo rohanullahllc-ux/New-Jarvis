@@ -21,7 +21,10 @@ from anthropic.lib.tools import ToolError
 
 import calc
 import config
+import contacts
+import shortcuts
 import speaker
+import ui_bridge
 import units
 from config import DEFAULT_CITY, HOME_CURRENCY
 from JarvisAdvancedBot import ChatBrain, FreeBrain, Frames, NLU
@@ -187,6 +190,56 @@ def _sentences(text, count=2):
     return first_sentences(text, count)
 
 
+# ---------------------------------------------------------------- your own shortcuts and the admin panel
+
+SHORTCUT_VERB = re.compile(r"^(?:open|launch|start|run|go to|take me to|show)(?: me)?(?: the| my)? (?P<name>[a-z0-9][a-z0-9 _.&'-]*?)(?: shortcut)?$")
+
+
+def _shortcut_named(text):
+    """The shortcut (made in the admin panel: a website, folder, file or program) that "open college portal" asks for, or None."""
+    found = SHORTCUT_VERB.match(text)
+    return shortcuts.find(found["name"]) if found else None
+
+
+def _by_shortcut(text):
+    """Open the shortcut the text names and say so; None if it names none. Checked before every other pattern: yours win over built-in meanings."""
+    item = _shortcut_named(text)
+    if item is None:
+        return None
+    try:
+        shortcuts.open_it(item)
+    except ToolError as error:
+        return str(error)
+    return f"Opening {item['name']}, sir."
+
+
+@intent(r"^(?:what are|list|show|tell me|read)(?: me)?(?: all)?(?: of)? my (?:own |custom )?shortcuts$", r"^what shortcuts (?:do i have|have i (?:made|got|set up))$")
+def my_shortcuts(m, ask):
+    names = [item["name"] for item in shortcuts.load()]
+    if not names:
+        return "You have no shortcuts yet, sir. Open the admin panel to make some: say open the admin panel."
+    return "Your shortcuts are: " + ", ".join(names) + "."
+
+
+JARVIS_SETTINGS = re.compile(r"\bjarvis(?:'s)? (?:settings|preferences|configuration|options)\b", re.I)      # (the name is dropped when a command is read)
+
+
+@intent(r"^(?:open|show|launch|start|bring up)(?: me)?(?: the| my| your)? (?:admin|administrator)(?: panel| window| screen| page| menu| console)?$",
+        r"^(?:change|edit|update|modify|customi[sz]e)(?: the| my| your)? (?:admin|administrator)(?: panel)?$",
+        r"^(?:change|edit|update|modify|customi[sz]e) (?:my|the|your) (?:settings|preferences)$")
+def admin_panel(m, ask):
+    """Open the admin panel (in the window if there is one, otherwise on its own). It asks for the password itself."""
+    if ui_bridge.request("admin"):
+        return "Opening the admin panel, sir. It will ask for your password."
+    import subprocess
+    import sys
+    try:
+        subprocess.Popen([sys.executable, str(config.BASE_DIR / "JarvisAdmin.py")], cwd=str(config.BASE_DIR))
+    except OSError:
+        return "I couldn't open the admin panel, sir. Run Admin-Panel dot bat, or python JarvisAdmin dot py."
+    return "Opening the admin panel in its own window, sir. It will ask for your password."
+
+
 # ---------------------------------------------------------------- small talk
 
 @intent(r"^(?:hi|hello|hey|hello there|good (?:morning|afternoon|evening)|assalam ?o? ?alaikum|salam|jar|jarvis)$")
@@ -234,7 +287,7 @@ def voice_check(m, ask):
 @intent(r"^(?:what can you do|help|what are your (?:features|skills|commands))")
 def help_me(m, ask):
     return ("I can tell you the time and weather, do maths and conversions, keep notes, tasks and reminders, open apps and "
-            "files, check your PC, follow space news, tell jokes, and chat about almost anything. Just ask, sir.")
+            "files, check your PC, follow space news, tell jokes, and chat about almost anything. Say admin panel for my settings.")
 
 
 # ---------------------------------------------------------------- time
@@ -1373,7 +1426,8 @@ def instagram(m, ask):
 def email(m, ask):
     if not (config.EMAIL_ADDRESS and config.EMAIL_PASSWORD):
         return "Email isn't set up yet, sir. Add your address and an app password to the dot env file."
-    to = _spoken_address(ask("Who should I send it to? Type the address, or say it like john at gmail dot com."))
+    answer = ask("Who should I send it to? Say a name from your contacts, type the address, or say it like john at gmail dot com.")
+    to = contacts.email_for(answer) or _spoken_address(answer)
     if not to:
         return "Okay, no email then."
     subject = ask("What's the subject?").strip()
@@ -1650,7 +1704,7 @@ def is_command(text):
     wording = _canonical(normalize(text))
     if not wording or EXPLANATION.match(wording):
         return False
-    if SESSION_WORDS.fullmatch(wording):
+    if SESSION_WORDS.fullmatch(wording) or _shortcut_named(wording) is not None:
         return True
     for candidate in (wording, imperative(wording)):           # ("making to do list" is "make to do list")
         handler = next((h for pattern, h in INTENTS if candidate and pattern.search(candidate)), None)
@@ -1748,10 +1802,16 @@ def LocalReply(query, ask=lambda question: "", guessed=False):
     """Return the reply for a command, or None if it wasn't understood. ``guessed`` is set when the command is the language
     model's rewrite of what was said, so a rewrite that no pattern understands cannot be rewritten again."""
     _context.query = query
+    if JARVIS_SETTINGS.search(query):
+        query = JARVIS_SETTINGS.sub("admin panel", query)          # "open Jarvis settings" is his own panel, not Windows' Settings
     text = normalize(query)
     if not text or EXPLANATION.match(text):
         return None                                      # (an explanation is for the chat brain, whatever words are in it)
     text = _canonical(text)
+    if not guessed:
+        reply = _by_shortcut(text)                       # "open college portal": a shortcut of yours beats any built-in meaning
+        if reply is not None:
+            return reply
     if MATH_TALK.search(text):
         text = Frames.numerals(text)                     # "fifteen percent of two hundred" -> "15 percent of 200"
     if not guessed:

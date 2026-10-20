@@ -5,15 +5,17 @@ microphone button (push to talk) and the hands-free switch all feed that one ses
 Jarvis says appears in the conversation, so the window works with the sound off.
 """
 import html
+import subprocess
 import sys
 import webbrowser
 
-from PyQt5.QtCore import QDateTime, Qt, QTimer
+from PyQt5.QtCore import QDateTime, Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QIcon, QPixmap, QTextCursor
 from PyQt5.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
                              QPlainTextEdit, QPushButton, QStackedWidget, QTextBrowser, QVBoxLayout, QWidget)
 
 import config
+import ui_bridge
 from gui import theme
 from gui.login_dialog import LoginDialog
 from gui.session import SessionController, WakeController
@@ -40,8 +42,11 @@ def heading(text):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, controller=None, login=LoginDialog, wake=None):
+    admin_requested = pyqtSignal()                 # "open the admin panel" was said or typed (that happens on the session's thread)
+
+    def __init__(self, controller=None, login=LoginDialog, wake=None, admin=None):
         super().__init__()
+        self._open_admin = admin                      # what opens the admin panel (tests supply their own)
         self.controller = controller or SessionController()
         self._login = login
         self._started_once = False
@@ -73,6 +78,9 @@ class MainWindow(QMainWindow):
         self.clock_timer.timeout.connect(self._tick)
         self.clock_timer.start(1000)
         self.setWindowIcon(self._icon())
+        self.admin_requested.connect(self.open_admin)
+        self._admin_handler = self.admin_requested.emit
+        ui_bridge.register("admin", self._admin_handler)
         if self.wake is not None:
             self.wake.woke.connect(self._on_woke)
             self.wake.problem.connect(self._on_wake_problem)
@@ -126,8 +134,11 @@ class MainWindow(QMainWindow):
         self.pill.setTextFormat(Qt.RichText)
         self.pill.setStyleSheet(f"font-weight: 600; font-size: 11pt; padding: 6px 14px; border: 1px solid {theme.EDGE};"
                                 "border-radius: 14px;")
+        self.admin_button = QPushButton("ADMIN")
+        self.admin_button.setToolTip("Change Jarvis's settings, make shortcuts and contacts, back up (asks for the password)")
         row.addLayout(titles)
         row.addStretch(1)
+        row.addWidget(self.admin_button, 0, Qt.AlignVCenter)
         row.addWidget(self.pill, 0, Qt.AlignVCenter)
         return row
 
@@ -323,6 +334,7 @@ class MainWindow(QMainWindow):
         self.quit_button.clicked.connect(self.close)
         self.send_button.clicked.connect(self.send)
         self.new_chat_button.clicked.connect(self.new_chat)
+        self.admin_button.clicked.connect(self.open_admin)
         self.input.returnPressed.connect(self.send)
         self.mic_button.clicked.connect(lambda _checked=False: self.controller.talk())
         self.hands_free_button.toggled.connect(c.set_hands_free)
@@ -360,6 +372,26 @@ class MainWindow(QMainWindow):
         """Clear the conversation on screen and have Jarvis forget it too."""
         if self.controller.reset_chat():
             self.chat.clear()
+
+    def open_admin(self):
+        """The admin panel (it asks for the password first). It can be opened while Jarvis is asleep or awake."""
+        if self._open_admin is not None:
+            self._open_admin(self)
+            return
+        from gui.admin_panel import open_admin
+        open_admin(self, restart=self.restart_jarvis)
+
+    def restart_jarvis(self):
+        """Close this window and open Jarvis again a few seconds later, as a new process, so every changed setting is read afresh."""
+        from jarvis_setup import windows
+        code = "import subprocess, sys, time; time.sleep(3); subprocess.Popen([sys.argv[1], sys.argv[2]], cwd=sys.argv[3])"
+        try:
+            subprocess.Popen([sys.executable, "-c", code, windows.pythonw(), str(config.BASE_DIR / "JarvisGUI.py"), str(config.BASE_DIR)],
+                             creationflags=0x00000008 | getattr(subprocess, "CREATE_NO_WINDOW", 0))       # DETACHED_PROCESS | CREATE_NO_WINDOW
+        except OSError as error:
+            self._say_status(f"I could not restart myself ({error}). Close me and start me again.")
+            return
+        QTimer.singleShot(200, self.close)
 
     def _open_utility(self, key):
         from gui.utils import launcher
@@ -462,6 +494,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._closing = True
+        ui_bridge.unregister("admin", self._admin_handler)
         if self.wake is not None:
             self.wake.disarm()
         self.clock_timer.stop()

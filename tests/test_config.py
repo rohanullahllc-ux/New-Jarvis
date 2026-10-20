@@ -1,5 +1,6 @@
 """Tests for the settings readers in config.py:  python -m unittest tests.test_config -v"""
 import os
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -37,7 +38,7 @@ class MicrophoneVolumeSettingTests(unittest.TestCase):
     def test_the_example_settings_explain_it_and_give_the_default(self):
         text = (config.BASE_DIR / ".env.example").read_text(encoding="utf-8")
         self.assertRegex(text, r"(?m)^MIC_VOLUME=80$")
-        self.assertIn("0 = never touch", text)
+        self.assertIn("0 = never touch", re.sub(r"\s*\n#\s*", " ", text))          # (long comments are wrapped over several lines)
 
 
 class LocalAddressTests(unittest.TestCase):

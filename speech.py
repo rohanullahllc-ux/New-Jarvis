@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 
+import personal
 import tts_piper
 from config import TTS_ENABLED, TTS_ENGINE, TTS_RATE, TTS_VOICE, TTS_VOLUME
 
@@ -181,7 +182,7 @@ def _say(text):
 
 def Speak(text):
     """Show `text`, pass it to any listeners, and say it aloud unless the voice is switched off."""
-    text = str(text).strip()
+    text = personal.address(str(text).strip())          # "sir" becomes the word the user chose (ADDRESS_AS)
     if not text:
         return
     _show(f"\nA.I : {text}\n")
@@ -193,7 +194,7 @@ def Speak(text):
 def Show(text):
     """Put text in front of the user (the console and the window's conversation) without saying it: for what a voice can't
     read aloud, such as an Urdu translation or a page of a book."""
-    text = str(text).strip()
+    text = personal.address(str(text).strip())
     if not text:
         return
     _show(f"\nA.I : {text}\n")
@@ -216,7 +217,7 @@ def SpeakStream(sentences, if_slow=None, after=4.0):
         try:
             for sentence in sentences:
                 ready.put(sentence)
-                _prefetch(str(sentence).strip())
+                _prefetch(personal.address(str(sentence).strip()))
         except BaseException as error:          # noqa: BLE001 - re-raised below, on the thread that is speaking
             problems.append(error)
         finally:
@@ -233,7 +234,7 @@ def SpeakStream(sentences, if_slow=None, after=4.0):
             continue
         if sentence is _DONE:
             break
-        sentence = str(sentence).strip()
+        sentence = personal.address(str(sentence).strip())
         if not sentence:
             continue
         _show(f"\nA.I : {sentence}\n" if first else f"      {sentence}\n")
