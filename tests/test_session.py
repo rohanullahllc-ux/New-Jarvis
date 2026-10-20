@@ -50,12 +50,13 @@ def scripted(*items):
 class LauncherFlow(unittest.TestCase):
     PASSWORD = "correct horse"
 
-    def run_startup(self, heard, passwords=(), sessions=(), face=True, face_check=True, password=PASSWORD):
+    def run_startup(self, heard, passwords=(), sessions=(), face=True, face_check=True, password=PASSWORD, mode="text"):
         """Run Startup.run() with scripted input. Returns (spoken lines, session calls, password prompts, output)."""
         spoken, out = [], io.StringIO()
         session = mock.Mock(side_effect=list(sessions) or ["quit"])
         prompts = mock.Mock(side_effect=scripted(*passwords))
         with mock.patch.multiple(config, JARVIS_PASSWORD=password, JARVIS_PASSWORD_HASH=""), \
+                mock.patch.object(Startup, "INPUT_MODE", mode), \
                 mock.patch.object(Startup, "listen", scripted(*heard)), \
                 mock.patch.object(Startup, "_read_password", prompts), \
                 mock.patch.object(Startup, "Speak", spoken.append), \
@@ -135,6 +136,47 @@ class LauncherFlow(unittest.TestCase):
     def test_the_camera_is_not_used_before_the_password_is_right(self):
         _, _, _, face_mock, _ = self.run_startup(["hey jarvis", "quit"], ["wrong", "wrong", "wrong"])
         face_mock.assert_not_called()
+
+
+class WakingByVoiceOrClap(unittest.TestCase):
+    """In voice mode the offline wake word and clap detectors wake him; the password and everything after is unchanged."""
+    PASSWORD = LauncherFlow.PASSWORD
+    run_startup = LauncherFlow.run_startup                  # (the same scripted launcher)
+
+    def wake(self, reasons, hint="To wake me, say 'hey Jarvis' or clap 2 times, or press START.", **options):
+        """run_startup in voice mode where listener.wait_for_wake gives these reasons in turn (None = the microphone failed)."""
+        queue = list(reasons)
+        self.waits = mock.Mock(side_effect=lambda: queue.pop(0) if queue else (_ for _ in ()).throw(SystemExit("script finished")))
+        with mock.patch("listener.wait_for_wake", self.waits), mock.patch("listener.hint", return_value=hint):
+            return self.run_startup(mode="voice", **options)
+
+    def test_a_clap_or_the_wake_word_asks_for_the_password_and_starts_the_session(self):
+        for reason in ("clap", "wake word"):
+            with self.subTest(reason=reason):
+                spoken, session, prompts, _, output = self.wake([reason], heard=[], passwords=[self.PASSWORD], sessions=["quit"])
+                session.assert_called_once()
+                self.assertEqual(prompts.call_count, 1)
+                self.assertIn("Access granted.", spoken)
+                self.assertIn("clap 2 times", output)                       # (he says how to wake him)
+
+    def test_a_wrong_password_after_a_clap_still_keeps_him_out(self):
+        spoken, session, prompts, _, _ = self.wake(["clap"], heard=[], passwords=["a", "b", "c"])
+        session.assert_not_called()
+        self.assertEqual(prompts.call_count, 3)
+
+    def test_when_the_microphone_cannot_be_used_for_it_the_old_way_still_works(self):
+        spoken, session, _, _, _ = self.wake([None], heard=["hey jarvis"], passwords=[self.PASSWORD], sessions=["quit"])
+        session.assert_called_once()
+
+    def test_with_nothing_to_listen_for_it_goes_straight_to_the_old_way(self):
+        spoken, session, _, _, _ = self.wake([], hint="", heard=["wake up"], passwords=[self.PASSWORD], sessions=["quit"])
+        self.waits.assert_not_called()
+        session.assert_called_once()
+
+    def test_typed_mode_never_touches_the_listener(self):
+        with mock.patch("listener.wait_for_wake", side_effect=AssertionError("listened in typed mode")):
+            _, session, _, _, _ = self.run_startup(["hey jarvis"], [self.PASSWORD], ["quit"], mode="text")
+        session.assert_called_once()
 
 
 class NoBackDoor(unittest.TestCase):

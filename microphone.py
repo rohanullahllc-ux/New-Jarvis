@@ -23,9 +23,12 @@ import time
 
 import speech_recognition as sr
 
+import speaker
 import speech
+import stt
 import winmm_mic
-from config import INPUT_MODE, MIC_BACKEND, MIC_BEEP, MIC_DEVICE, MIC_PAUSE, MIC_VOLUME, SPEECH_LANGUAGE, SPEECH_LANGUAGE_FALLBACK
+from config import (INPUT_MODE, MIC_BACKEND, MIC_BEEP, MIC_DEVICE, MIC_PAUSE, MIC_VOLUME, SPEECH_LANGUAGE, SPEECH_LANGUAGE_FALLBACK,
+                    STT_ENGINE)
 from winmm_mic import MicrophoneError, WinMMMicrophone
 
 READ_TIMEOUT = 5       # seconds without audio before a backend is declared dead
@@ -631,9 +634,64 @@ def _noted(audio, why):
         last_note = "Your voice is very quiet for the microphone. Move closer, or raise the microphone volume in Windows."
 
 
+def _owner(audio):
+    """True if the voice lock lets this recording through (it is the owner's voice, or the lock is off)."""
+    global last_note
+    try:
+        verdict = speaker.accept(audio)
+    except Exception as error:                       # noqa: BLE001 - a faulty check must never leave Jarvis deaf
+        print(f": (the voice lock failed - {error}; listening anyway)")
+        return True
+    if verdict.ok:
+        return True
+    shown = f", score {verdict.score:.2f}" if verdict.score is not None else ""
+    print(f": (that was not your voice{shown}, so I'm ignoring it)")
+    last_note = ("I didn't recognise your voice, so I ignored that. Say it again, a little closer to the microphone, or type it. "
+                 "Saying or typing 'turn off the voice lock' stops this.")
+    return False
+
+
+def _whisper(audio):
+    """What Whisper (on this PC) heard: the words, "" if it ran and heard nothing, None if it cannot be used (then Google is asked)."""
+    if not stt.available():
+        return None
+    try:
+        print(": Recognizing (on this PC).....")
+        return stt.transcribe(audio)
+    except stt.SpeechRecognitionFailed as error:
+        if str(error) not in _whisper_problems:
+            _whisper_problems.add(str(error))
+            print(f": (Whisper could not be used - {error}; asking Google instead)")
+        return None
+
+
+_whisper_problems = set()
+
+
+def _no_words(audio):
+    """Nothing could be understood in this recording: leave a hint for the user and count the miss."""
+    try:
+        import audioop
+        quiet = audioop.rms(audio.frame_data, audio.sample_width) < 40
+    except Exception:                                # noqa: BLE001
+        quiet = False
+    _noted(audio, "quiet" if quiet else "unclear")
+    _calibration["misses"] += 1
+    return None
+
+
 def _recognize(audio, language):
-    """The words in a recording: a string, None if nothing could be understood, "" if Google's speech service is out of reach."""
+    """The words in a recording: a string, None if nothing could be understood, "" if Google's speech service is out of reach.
+
+    Whisper on this PC goes first. Google is the second opinion when Whisper heard nothing (STT_ENGINE=auto), and the only
+    one when Whisper is not installed or STT_ENGINE=google."""
     audio_loud = _louder(audio)
+    heard = _whisper(audio_loud)
+    if heard:
+        _calibration["misses"] = 0
+        return _choose([heard])
+    if heard == "" and STT_ENGINE == "whisper":      # Whisper heard nothing, and Google is not allowed to listen
+        return _no_words(audio)
     result = None
     for attempt in range(2):
         try:
@@ -657,14 +715,7 @@ def _recognize(audio, language):
         except (sr.UnknownValueError, sr.RequestError):
             alternatives = []
     if not alternatives:
-        try:
-            import audioop
-            quiet = audioop.rms(audio.frame_data, audio.sample_width) < 40
-        except Exception:                            # noqa: BLE001
-            quiet = False
-        _noted(audio, "quiet" if quiet else "unclear")
-        _calibration["misses"] += 1
-        return None
+        return _no_words(audio)
     _calibration["misses"] = 0
     return _choose(alternatives)
 
@@ -698,12 +749,17 @@ def _hear(language, timeout, phrase_time_limit):
     if audio is None:
         _release_when_idle()
         return None
+    if not _owner(audio):
+        _release_when_idle()
+        return ""                                    # heard, but not the owner's voice: nothing is done with it
     text = _recognize(audio, language)
     for _ in range(MAX_CONTINUATIONS):
         if not text or not _unfinished(text):
             break
         print(f": ({text!r} sounds unfinished, so I'm still listening...)")
         more_audio = _capture(CONTINUE_WAIT, phrase_time_limit)
+        if more_audio is not None and not _owner(more_audio):
+            break
         more = _recognize(more_audio, language) if more_audio is not None else None
         if not more:
             break
@@ -892,15 +948,26 @@ def diagnose(only_backend=None, speak_test=True):
             problems.append("Jarvis hears only background noise. Check the Input volume and mute switch in "
                             "Settings > System > Sound, and that the right microphone is the default input "
                             "(or set MIC_DEVICE in .env).")
-        print("5) Speech recognition (Google)")
-        try:
-            heard = sr.Recognizer().recognize_google(sr.AudioData(raw, rate, 2), language=LANGUAGE)
-            line("OK", f"Google heard: {heard!r}")
-        except sr.UnknownValueError:
-            line("WARN", "Google could not understand that recording (speak closer / louder, reduce noise)")
-        except sr.RequestError as e:
-            line("FAIL", f"cannot reach Google's speech service: {e}")
-            problems.append("Check your internet connection, firewall or proxy - the speech service is online-only.")
+        print("5) Speech recognition")
+        recording = sr.AudioData(raw, rate, 2)
+        if stt.available():
+            started = time.time()
+            try:
+                line("OK", f"Whisper (on this PC) heard: {stt.transcribe(recording)!r} in {time.time() - started:.1f}s")
+            except stt.SpeechRecognitionFailed as error:
+                line("WARN", f"Whisper could not be used: {error}")
+        else:
+            line("INFO", "Whisper is not set up (python stt.py --download), so Google is used")
+        if STT_ENGINE != "whisper":
+            try:
+                heard = sr.Recognizer().recognize_google(recording, language=LANGUAGE)
+                line("OK", f"Google heard: {heard!r}")
+            except sr.UnknownValueError:
+                line("WARN", "Google could not understand that recording (speak closer / louder, reduce noise)")
+            except sr.RequestError as e:
+                line("FAIL" if not stt.available() else "WARN", f"cannot reach Google's speech service: {e}")
+                if not stt.available():
+                    problems.append("Check your internet connection, firewall or proxy - the speech service is online-only.")
     elif working and speak_test:
         line("INFO", "skipping the 'say a sentence' step (this window cannot take typed input)")
 

@@ -357,5 +357,78 @@ class VoiceTests(ControllerCase):
         self.assertTrue(wait_for(lambda: seen.heard == ["hello"]))
 
 
+class FakeListener:
+    """Stands in for listener.WakeListener: remembers how it was started and stopped, and wakes him when told to."""
+
+    def __init__(self, on_wake, starts=True, error=""):
+        self.on_wake, self.starts, self.error = on_wake, starts, error
+        self.running, self.stopped = False, 0
+
+    def start(self):
+        self.running = self.starts
+        return self.starts
+
+    def stop(self):
+        self.running = False
+        self.stopped += 1
+
+
+class WakeControllerTests(unittest.TestCase):
+    def make(self, **options):
+        from gui.session import WakeController
+        self.made = []
+
+        def factory(on_wake):
+            self.made.append(FakeListener(on_wake, **options))
+            return self.made[-1]
+
+        controller = WakeController(factory)
+        self.woke, self.problems = [], []
+        controller.woke.connect(self.woke.append, Qt.DirectConnection)
+        controller.problem.connect(self.problems.append, Qt.DirectConnection)
+        return controller
+
+    def test_the_wake_word_or_a_clap_comes_out_as_a_signal(self):
+        controller = self.make()
+        self.assertTrue(controller.arm())
+        self.assertTrue(controller.armed)
+        self.made[0].on_wake("clap")
+        self.made[0].on_wake("wake word")
+        self.assertEqual(self.woke, ["clap", "wake word"])
+
+    def test_arming_twice_listens_once(self):
+        controller = self.make()
+        controller.arm()
+        controller.arm()
+        self.assertEqual(len(self.made), 1)
+
+    def test_disarming_lets_go_of_the_microphone_and_it_can_be_armed_again(self):
+        controller = self.make()
+        controller.arm()
+        controller.disarm()
+        self.assertEqual(self.made[0].stopped, 1)
+        self.assertFalse(controller.armed)
+        controller.disarm()                                           # (harmless when nothing is listening)
+        self.assertTrue(controller.arm())
+        self.assertEqual(len(self.made), 2)
+
+    def test_when_there_is_nothing_to_listen_for_the_user_is_told_why(self):
+        controller = self.make(starts=False, error="wake word and claps are both switched off (or not installed)")
+        self.assertFalse(controller.arm())
+        self.assertEqual(self.problems, ["wake word and claps are both switched off (or not installed)"])
+        self.assertFalse(controller.armed)
+
+    def test_a_microphone_that_turns_out_not_to_work_is_reported_when_checked(self):
+        controller = self.make()
+        controller.arm()
+        controller.check()
+        self.assertEqual(self.problems, [])                           # (listening fine: nothing to say)
+        self.made[0].running = False
+        self.made[0].error = "I can't listen for the wake word: the microphone was unplugged"
+        controller.check()
+        self.assertEqual(self.problems, ["I can't listen for the wake word: the microphone was unplugged"])
+        self.assertFalse(controller.armed)
+
+
 if __name__ == "__main__":
     unittest.main()

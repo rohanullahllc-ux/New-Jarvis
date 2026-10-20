@@ -23,7 +23,8 @@ import sys
 import threading
 import time
 
-from config import TTS_ENABLED, TTS_RATE, TTS_VOICE, TTS_VOLUME
+import tts_piper
+from config import TTS_ENABLED, TTS_ENGINE, TTS_RATE, TTS_VOICE, TTS_VOLUME
 
 _local = threading.local()
 _listeners = []          # extra places a reply should appear, e.g. the GUI's conversation pane
@@ -127,14 +128,46 @@ def _voice():
     return voice
 
 
+def _use_piper():
+    """True when Jarvis speaks with the natural Piper voice (TTS_ENGINE, and a voice installed in models/piper)."""
+    return TTS_ENGINE in ("auto", "piper") and tts_piper.available()
+
+
+def _rate_for(text):
+    return (2 if len(text) > 30 else 0) + TTS_RATE          # long replies a little faster
+
+
+def _report(problem):
+    """Say a voice problem once, not on every sentence."""
+    if problem not in _reported:
+        _reported.add(problem)
+        print(f": ({problem})")
+
+
+def warm_up():
+    """Load the natural voice in the background (a few seconds), so the first reply is not slow."""
+    if TTS_ENABLED and _use_piper():
+        tts_piper.warm_up()
+
+
+def _prefetch(sentence):
+    """Start making the sentence in the natural voice while the one before it is still being spoken."""
+    if TTS_ENABLED and _use_piper():
+        tts_piper.prefetch(sentence, _rate_for(sentence))
+
+
 def _say(text):
     """Speak ``text`` and wait until it has been said. Returns False if the voice failed."""
     try:
         with _say_lock:
             _speaking.set()
             try:
+                if _use_piper():
+                    if tts_piper.say(text, _rate_for(text)):
+                        return True
+                    _report(f"the natural voice failed ({tts_piper.last_error}); the Windows voice says it instead")
                 voice = _voice()
-                voice.Rate = max(-10, min(10, (2 if len(text) > 30 else 0) + TTS_RATE))     # long replies a little faster
+                voice.Rate = max(-10, min(10, _rate_for(text)))
                 voice.Speak(text, 0)            # 0 = do not return until the whole sentence has been spoken
             finally:
                 _last_spoken[0] = time.monotonic()
@@ -142,10 +175,7 @@ def _say(text):
         return True
     except Exception as error:
         _local.voice = None                     # start fresh next time rather than reusing a broken voice
-        problem = f"{type(error).__name__}: {error}"
-        if problem not in _reported:
-            _reported.add(problem)
-            print(f": (the voice is unavailable - {error}; carrying on in text)")
+        _report(f"the voice is unavailable - {error}; carrying on in text")
         return False
 
 
@@ -186,6 +216,7 @@ def SpeakStream(sentences, if_slow=None, after=4.0):
         try:
             for sentence in sentences:
                 ready.put(sentence)
+                _prefetch(str(sentence).strip())
         except BaseException as error:          # noqa: BLE001 - re-raised below, on the thread that is speaking
             problems.append(error)
         finally:
@@ -222,9 +253,13 @@ def check():
         print("  [INFO] TTS_ENABLED=false in .env, so Jarvis is set to stay silent.")
         return True
     try:
-        voice = _voice()
-        print(f"  [INFO] installed voices: {', '.join(token.GetDescription() for token in voice.GetVoices())}")
-        print(f"  [INFO] speaking with: {voice.Voice.GetDescription()} (volume {voice.Volume}, rate adjustment {TTS_RATE})")
+        if _use_piper():
+            print(f"  [INFO] speaking with the natural voice {tts_piper.voice_name()} (Piper, made on this PC; "
+                  f"installed: {', '.join(tts_piper.installed())})")
+        else:
+            voice = _voice()
+            print(f"  [INFO] installed voices: {', '.join(token.GetDescription() for token in voice.GetVoices())}")
+            print(f"  [INFO] speaking with: {voice.Voice.GetDescription()} (volume {voice.Volume}, rate adjustment {TTS_RATE})")
     except Exception as error:
         print(f"  [FAIL] Windows speech can't be started: {error}")
         return False

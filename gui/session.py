@@ -265,3 +265,49 @@ class SessionController(QObject):
             changed, self._state = state != self._state, state
         if changed:
             self.state_changed.emit(state)
+
+
+def _default_wake_listener(on_wake):
+    import listener
+    return listener.WakeListener(on_wake)
+
+
+class WakeController(QObject):
+    """Wakes Jarvis while he sleeps: "hey Jarvis" or a clap pattern (listener.py) has the same effect as pressing START.
+
+    The window arms it when he goes to sleep and disarms it the moment he is woken or START is pressed, because the session
+    opens the microphone for itself. It never opens a session or skips the password: it only says "someone woke him"."""
+    woke = pyqtSignal(str)                # "wake word" or "clap"
+    problem = pyqtSignal(str)             # why it cannot listen
+
+    def __init__(self, make_listener=None, parent=None):
+        super().__init__(parent)
+        self._make = make_listener or _default_wake_listener
+        self._listener = None
+
+    @property
+    def armed(self):
+        return self._listener is not None and self._listener.running
+
+    def arm(self):
+        """Start listening in the background. False if there is nothing to listen for."""
+        if self.armed:
+            return True
+        self._listener = self._make(self.woke.emit)
+        if self._listener.start():
+            return True
+        self.problem.emit(self._listener.error or "Nothing is switched on to wake me.")
+        self._listener = None
+        return False
+
+    def check(self):
+        """Some moments after arming: tell the user if the microphone turned out not to work."""
+        if self._listener is not None and not self._listener.running and self._listener.error:
+            self.problem.emit(self._listener.error)
+            self._listener = None
+
+    def disarm(self):
+        """Stop listening and let go of the microphone."""
+        listener, self._listener = self._listener, None
+        if listener is not None:
+            listener.stop()

@@ -22,11 +22,14 @@ import speech_recognition as sr  # noqa: E402
 
 import microphone  # noqa: E402
 import winmm_mic  # noqa: E402
-from tests.isolation import no_windows_audio  # noqa: E402
+from tests.isolation import no_natural_voice, no_voice_lock, no_whisper, no_windows_audio  # noqa: E402
 
 
 def setUpModule():
     no_windows_audio()                    # (getting the microphone ready also checks the Windows volume; these tests must not touch it)
+    no_whisper()                          # (and they stand in for Google's service: Whisper has its own tests)
+    no_voice_lock()                       # (and a voice print made on this PC must not decide which voices they may use)
+    no_natural_voice()                    # (and the echo tests speak through a stand-in Windows voice, never the real natural one)
 
 
 try:
@@ -286,6 +289,111 @@ class VoicePipelineCase(unittest.TestCase):
         if isinstance(answer, Exception):
             raise answer
         return {"alternative": [{"transcript": text} for text in answer], "final": True} if answer else []
+
+
+class OnlyTheOwnersVoiceTests(VoicePipelineCase):
+    """With the voice lock on, a voice that is not the owner's is heard and then ignored, without anything being recognised."""
+
+    def setUp(self):
+        super().setUp()
+        self.verdicts = []                                   # what the voice check says, one answer per recording
+        self.accept = mock.Mock(side_effect=lambda audio: self.verdicts.pop(0) if self.verdicts else microphone.speaker.Verdict(True, 0.8, "match"))
+        patcher = mock.patch.object(microphone.speaker, "accept", self.accept)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_owner_is_understood_as_usual(self):
+        self.said.append(["open chrome"])
+        self.assertEqual(microphone._hear("en-pk", 5, 10), "open chrome")
+
+    def test_somebody_elses_voice_is_ignored_before_anything_is_recognised(self):
+        self.verdicts.append(microphone.speaker.Verdict(False, 0.21, "mismatch"))
+        self.said.append(["open chrome"])
+        with mock.patch("builtins.print") as shown:
+            self.assertEqual(microphone._hear("en-pk", 5, 10), "")
+        self.recognizer.recognize_google.assert_not_called()
+        self.assertIn("not your voice", " ".join(str(call.args[0]) for call in shown.call_args_list if call.args))
+        self.assertIn("didn't recognise your voice", microphone.take_note())
+
+    def test_ignoring_a_stranger_is_not_counted_as_the_microphone_failing(self):
+        self.verdicts.extend([microphone.speaker.Verdict(False, 0.1, "mismatch")] * (microphone.UNHEARD_LIMIT + 2))
+        for _ in range(microphone.UNHEARD_LIMIT + 2):
+            self.assertEqual(microphone.listen(), "")
+        self.assertFalse(microphone._text_mode)                           # (it must not give up on voice and switch to typing)
+        self.assertEqual(microphone._unheard, 0)
+
+    def test_the_gui_gets_an_empty_answer_and_the_reason_for_it(self):
+        self.verdicts.append(microphone.speaker.Verdict(False, 0.1, "mismatch"))
+        self.assertEqual(microphone.listen_voice(), "")
+        self.assertTrue(microphone.take_note())
+
+    def test_a_second_part_of_a_sentence_in_another_voice_is_not_joined_on(self):
+        self.recognizer.listen.side_effect = lambda *a, **k: audio_of()
+        self.said.extend([["can you add a"], ["task buy milk"]])
+        self.verdicts.extend([microphone.speaker.Verdict(True, 0.8, "match"), microphone.speaker.Verdict(False, 0.1, "mismatch")])
+        self.assertEqual(microphone._hear("en-pk", 5, 10), "can you add a")
+
+    def test_a_voice_check_that_breaks_never_leaves_jarvis_deaf(self):
+        self.accept.side_effect = RuntimeError("model crashed")
+        self.said.append(["open chrome"])
+        self.assertEqual(microphone._hear("en-pk", 5, 10), "open chrome")
+
+
+class WhisperFirstTests(VoicePipelineCase):
+    """Whisper on this PC hears first; Google is only the second opinion (STT_ENGINE=auto) or not asked at all (=whisper)."""
+
+    def setUp(self):
+        super().setUp()
+        microphone._whisper_problems.clear()
+        self.whisper = mock.Mock(return_value="open the task folder")
+        for patcher in (mock.patch.object(microphone.stt, "available", return_value=True),
+                        mock.patch.object(microphone.stt, "transcribe", self.whisper),
+                        mock.patch.object(microphone, "STT_ENGINE", "auto")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_the_words_whisper_heard_are_used_and_google_is_never_asked(self):
+        self.assertEqual(microphone._hear("en-pk", 5, 10), "open the task folder")
+        self.recognizer.recognize_google.assert_not_called()
+
+    def test_when_whisper_heard_nothing_google_is_the_second_opinion(self):
+        self.whisper.return_value = ""
+        self.said.append(["what time is it"])
+        self.assertEqual(microphone._hear("en-pk", 5, 10), "what time is it")
+        self.recognizer.recognize_google.assert_called()
+
+    def test_with_whisper_only_google_is_never_asked_and_the_user_is_told_why_nothing_was_heard(self):
+        self.whisper.return_value = ""
+        with mock.patch.object(microphone, "STT_ENGINE", "whisper"):
+            self.assertIsNone(microphone._hear("en-pk", 5, 10))
+        self.recognizer.recognize_google.assert_not_called()
+        self.assertIn("couldn't make out", microphone.take_note())
+        self.assertEqual(microphone._calibration["misses"], 1)
+
+    def test_when_whisper_breaks_google_takes_over_and_the_problem_is_shown_once(self):
+        self.whisper.side_effect = microphone.stt.SpeechRecognitionFailed("out of memory")
+        self.said.extend([["open chrome"], ["volume up"]])
+        with mock.patch("builtins.print") as shown:
+            self.assertEqual(microphone._hear("en-pk", 5, 10), "open chrome")
+            self.assertEqual(microphone._hear("en-pk", 5, 10), "volume up")
+        notices = [call.args[0] for call in shown.call_args_list if call.args and "Whisper could not be used" in str(call.args[0])]
+        self.assertEqual(len(notices), 1)
+
+    def test_a_quiet_recording_is_made_louder_before_whisper_hears_it(self):
+        self.recognizer.listen.side_effect = lambda *a, **k: audio_of(level=100)
+        microphone._hear("en-pk", 5, 10)
+        heard = self.whisper.call_args[0][0]
+        import audioop
+        self.assertGreater(audioop.rms(heard.frame_data, heard.sample_width), 300)
+
+    def test_what_whisper_heard_goes_through_the_same_choice_as_googles_guesses(self):
+        with mock.patch.object(microphone, "_choose", return_value="chosen words") as choose:
+            self.assertEqual(microphone._hear("en-pk", 5, 10), "chosen words")
+        choose.assert_called_once_with(["open the task folder"])
+
+    def test_an_unfinished_sentence_from_whisper_still_waits_for_the_rest(self):
+        self.whisper.side_effect = ["can you add a", "task buy milk"]
+        self.assertEqual(microphone._hear("en-pk", 5, 10), "can you add a task buy milk")
 
 
 class OpenMicrophoneTests(VoicePipelineCase):

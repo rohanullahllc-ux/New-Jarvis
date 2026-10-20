@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QLa
 import config
 from gui import theme
 from gui.login_dialog import LoginDialog
-from gui.session import SessionController
+from gui.session import SessionController, WakeController
 from gui.sprites import SpritePlayer
 
 QUICK_LINKS = [("YouTube", "https://www.youtube.com"), ("Google", "https://www.google.com"),
@@ -40,11 +40,13 @@ def heading(text):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, controller=None, login=LoginDialog):
+    def __init__(self, controller=None, login=LoginDialog, wake=None):
         super().__init__()
         self.controller = controller or SessionController()
         self._login = login
         self._started_once = False
+        self.wake = wake                      # a WakeController: "hey Jarvis" or a clap presses START for you (None = off)
+        self._closing = False
         self.setWindowTitle("J.A.R.V.I.S")
         self.resize(1120, 760)
         self.setMinimumSize(980, 700)
@@ -71,6 +73,37 @@ class MainWindow(QMainWindow):
         self.clock_timer.timeout.connect(self._tick)
         self.clock_timer.start(1000)
         self.setWindowIcon(self._icon())
+        if self.wake is not None:
+            self.wake.woke.connect(self._on_woke)
+            self.wake.problem.connect(self._on_wake_problem)
+            QTimer.singleShot(0, self._arm_wake)                      # once the window is up
+
+    # ---- waking him by voice or by clapping
+
+    def _arm_wake(self):
+        """While he sleeps, listen for "hey Jarvis" or a clap (they do what START does)."""
+        if self.wake is None or self._closing or self.controller.running:
+            return
+        if self.wake.arm():
+            from listener import hint
+            self._say_status(hint())
+            QTimer.singleShot(2500, self.wake.check)                  # the microphone may turn out not to open
+
+    def _on_woke(self, reason):
+        """"hey Jarvis" or the claps were heard: the same as START, which asks for the password."""
+        self.wake.disarm()                                            # the session opens the microphone for itself
+        self._say_status(f"Woken by {reason}.")
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        QApplication.beep()
+        self.start()
+        if not self.controller.running:                               # the password was not given
+            self._arm_wake()
+
+    def _on_wake_problem(self, text):
+        self._say_status(text)
+        self._add_note(text)
 
     # ---- building the window
 
@@ -301,9 +334,12 @@ class MainWindow(QMainWindow):
         """Ask for the password, then start the session."""
         if self.controller.running:
             return
+        if self.wake is not None:
+            self.wake.disarm()                                        # (the session needs the microphone)
         dialog = self._login(self)
         if dialog.exec_() != dialog.Accepted:
             self._say_status("Not unlocked.")
+            self._arm_wake()
             return
         self.pages.setCurrentIndex(1)
         if self._started_once:
@@ -399,6 +435,8 @@ class MainWindow(QMainWindow):
             self._add_note("Jarvis is asleep. Press START to wake him")
         elif outcome == "error":
             self._add_note("The session stopped because of an error. Open the LOG for details")
+        if outcome != "quit":
+            self._arm_wake()                                          # asleep again: listen for the wake word or the claps
 
     def _on_hands_free(self, on):
         self.hands_free_button.blockSignals(True)
@@ -423,6 +461,9 @@ class MainWindow(QMainWindow):
         self.date.setText(now.toString("dddd, d MMMM yyyy"))
 
     def closeEvent(self, event):
+        self._closing = True
+        if self.wake is not None:
+            self.wake.disarm()
         self.clock_timer.stop()
         self.controller.stop()
         if self.music_button.isChecked():
@@ -435,6 +476,19 @@ def main(argv=None):
     app = QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName("Jarvis")
     app.setStyleSheet(theme.STYLESHEET)
-    window = MainWindow()
+    _warm_up_voice()
+    window = MainWindow(wake=WakeController() if config.INPUT_MODE == "voice" else None)
     window.show()
     return app.exec_()
+
+
+def _warm_up_voice():
+    """Load the natural voice, Whisper and the voice-lock model in the background while the window opens and the password is typed."""
+    import speaker
+    import speech
+    import stt
+    for load in (speech.warm_up, stt.warm_up, speaker.warm_up):
+        try:
+            load()
+        except Exception:                                  # noqa: BLE001 - each of them reports its own trouble when it is used
+            pass

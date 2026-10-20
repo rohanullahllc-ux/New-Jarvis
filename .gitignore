@@ -29,6 +29,8 @@ DataBase/FaceDetectionModule/trainer/
 
 # ---- Models trained on this PC, and what they were measured on (your own sentences are in these)
 models/
+# Your voice print (biometric: it never leaves this PC; python enroll_voice.py --delete removes it)
+DataBase/voiceprint.npz
 training/nlu_real.txt
 training/reports/
 

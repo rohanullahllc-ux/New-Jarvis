@@ -15,7 +15,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PyQt5.QtCore import Qt, QTimer  # noqa: E402
+from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal  # noqa: E402
 from PyQt5.QtGui import QImage  # noqa: E402
 from PyQt5.QtTest import QTest  # noqa: E402
 from PyQt5.QtWidgets import QApplication, QDialog  # noqa: E402
@@ -626,6 +626,144 @@ class WindowTests(WindowCase):
             self.assertGreater(image.width(), 900)
             colours = {image.pixel(x, y) for x in range(0, image.width(), 40) for y in range(0, image.height(), 40)}
             self.assertGreater(len(colours), 5)
+
+
+class FakeWake(QObject):
+    """Stands in for gui.session.WakeController: records arm / disarm / check, and wakes him when told to."""
+    woke = pyqtSignal(str)
+    problem = pyqtSignal(str)
+
+    def __init__(self, arms=True):
+        super().__init__()
+        self.arms, self.calls = arms, []
+
+    def arm(self):
+        self.calls.append("arm")
+        return self.arms
+
+    def disarm(self):
+        self.calls.append("disarm")
+
+    def check(self):
+        self.calls.append("check")
+
+
+class WakeUpTests(unittest.TestCase):
+    """"hey Jarvis" or a clap presses START for you: the password is still asked, and the microphone is shared with the session."""
+
+    def setUp(self):
+        for patcher in (mock.patch.object(speech, "TTS_ENABLED", False), mock.patch.object(sys, "stdout", mock.MagicMock()),
+                        mock.patch.object(config, "INPUT_MODE", "text"), mock.patch.object(config, "GUI_ANIMATIONS", False),
+                        mock.patch("webbrowser.open"), mock.patch.object(QApplication, "beep"),
+                        mock.patch("listener.hint", return_value="To wake me, say 'hey Jarvis' or clap 2 times, or press START.")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.controller = SessionController(run_session=echo_session, listen_voice=lambda timeout, limit: "")
+        self.wake = FakeWake()
+        self.dialogs = []
+
+    def window(self, accept=True, wake="default"):
+        def login(parent):
+            self.dialogs.append(self.controller.running)
+            return FakeDialog(QDialog.Accepted if accept else QDialog.Rejected)
+
+        window = main_window.MainWindow(controller=self.controller, login=login, wake=self.wake if wake == "default" else wake)
+        window.show()
+        self.addCleanup(self.shut, window)
+        return window
+
+    def shut(self, window):
+        self.controller.stop()
+        if self.controller._thread:
+            self.controller._thread.join(5)
+        window.close()
+
+    def test_he_listens_for_the_wake_word_once_the_window_is_up_and_says_how_to_wake_him(self):
+        window = self.window()
+        self.assertTrue(wait_for(lambda: "arm" in self.wake.calls))
+        self.assertIn("clap 2 times", window.status.text())
+        self.assertTrue(wait_for(lambda: "check" in self.wake.calls, 4))              # (and looks again a moment later)
+
+    def test_without_a_wake_controller_nothing_changes(self):
+        window = self.window(wake=None)
+        window.start_button.click()
+        self.assertTrue(self.controller.running)
+
+    def test_a_clap_or_the_wake_word_stops_listening_and_asks_for_the_password_like_start(self):
+        window = self.window()
+        wait_for(lambda: "arm" in self.wake.calls)
+        self.wake.calls.clear()
+        self.wake.woke.emit("clap")
+        self.assertTrue(wait_for(lambda: self.controller.running))
+        self.assertEqual(self.dialogs, [False])                                       # the password was asked, before anything ran
+        self.assertEqual(self.wake.calls[0], "disarm")                                # the session takes the microphone
+        self.assertNotIn("arm", self.wake.calls)                                      # (and he does not listen while the session runs)
+        self.assertEqual(window.pages.currentIndex(), 1)
+
+    def test_when_the_password_is_not_given_he_goes_back_to_listening(self):
+        window = self.window(accept=False)
+        wait_for(lambda: "arm" in self.wake.calls)
+        self.wake.calls.clear()
+        self.wake.woke.emit("wake word")
+        self.assertTrue(wait_for(lambda: "arm" in self.wake.calls))
+        self.assertFalse(self.controller.running)
+        self.assertEqual(window.status.text().startswith("To wake me"), True)
+
+    def test_pressing_start_gives_up_the_microphone_first_and_listens_again_if_refused(self):
+        window = self.window(accept=False)
+        wait_for(lambda: "arm" in self.wake.calls)
+        self.wake.calls.clear()
+        window.start_button.click()
+        self.assertEqual(self.wake.calls[:2], ["disarm", "arm"])
+        self.assertEqual(window.status.text().startswith("To wake me"), True)
+
+    def test_when_he_goes_to_sleep_he_listens_for_the_wake_word_again_but_not_after_quit(self):
+        window = self.window()
+        window.start_button.click()
+        self.assertTrue(wait_for(lambda: self.controller.state == "ready"))
+        self.wake.calls.clear()
+        self.controller.submit("sleep")
+        self.assertTrue(wait_for(lambda: "arm" in self.wake.calls))
+        self.assertIn("asleep", window.chat.toPlainText())
+
+    def test_a_session_that_ends_by_quit_closes_the_window_and_does_not_listen_again(self):
+        window = self.window()
+        window.start_button.click()
+        wait_for(lambda: self.controller.state == "ready")
+        self.wake.calls.clear()
+        self.controller.submit("quit")
+        self.assertTrue(wait_for(lambda: not window.isVisible()))
+        self.assertNotIn("arm", self.wake.calls)
+
+    def test_closing_the_window_lets_go_of_the_microphone_and_never_starts_listening_again(self):
+        window = self.window()
+        wait_for(lambda: "arm" in self.wake.calls)
+        self.wake.calls.clear()
+        window.close()
+        window._arm_wake()
+        self.assertEqual(self.wake.calls, ["disarm"])
+
+    def test_a_problem_with_the_microphone_is_shown_to_the_user(self):
+        window = self.window()
+        wait_for(lambda: "arm" in self.wake.calls)                                    # (arming shows the hint first)
+        self.wake.problem.emit("I can't listen for the wake word: the microphone was unplugged")
+        self.assertTrue(wait_for(lambda: "unplugged" in window.status.text()))
+        self.assertIn("unplugged", window.chat.toPlainText())
+
+    def test_nothing_to_listen_for_means_no_hint_and_no_second_look(self):
+        self.wake = FakeWake(arms=False)
+        window = self.window()
+        wait_for(lambda: "arm" in self.wake.calls)
+        time.sleep(0.1)
+        self.assertNotIn("To wake me", window.status.text())
+        self.assertNotIn("check", self.wake.calls)
+
+    def test_he_does_not_start_listening_for_the_wake_word_while_a_session_is_running(self):
+        window = self.window(wake=None)
+        window.start_button.click()
+        window.wake = self.wake
+        window._arm_wake()
+        self.assertEqual(self.wake.calls, [])
 
 
 if __name__ == "__main__":

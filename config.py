@@ -70,6 +70,17 @@ MIC_BEEP = flag("MIC_BEEP", True)                   # a short beep when the micr
 MIC_VOLUME = min(100, max(0, number("MIC_VOLUME", 80)))   # muted, or under 50 percent in Windows at start-up: Jarvis sets it to this many percent (0 = never touch it)
 SPEECH_LANGUAGE = key("SPEECH_LANGUAGE", "en-pk")   # what Google's speech recognition expects you to speak (en-pk, en-in, en-us, en-gb...)
 SPEECH_LANGUAGE_FALLBACK = key("SPEECH_LANGUAGE_FALLBACK", "en-us")     # tried once when the first language understood nothing
+STT_ENGINE = key("STT_ENGINE", "auto").lower()      # auto (Whisper on this PC; Google only if it heard nothing) | whisper (never Google) | google
+STT_MODEL = key("STT_MODEL", "base.en")             # tiny.en (quickest) | base.en | small.en (most accurate, slowest)
+TTS_ENGINE = key("TTS_ENGINE", "auto").lower()      # auto (the natural Piper voice when one is installed) | piper | windows
+PIPER_VOICE = key("PIPER_VOICE", "en_GB-alan-medium")      # a voice in models/piper (python tts_piper.py --demo plays them all)
+WAKE_WORD = flag("WAKE_WORD", True)                 # while the window is open and he is asleep, "hey Jarvis" wakes him (detected on this PC)
+WAKE_SENSITIVITY = min(0.95, max(0.05, decimal("WAKE_SENSITIVITY", 0.5)))      # higher hears it more easily, with more false wake-ups
+CLAP_WAKE = flag("CLAP_WAKE", True)                 # clapping CLAP_COUNT times wakes him
+CLAP_COUNT = min(4, max(1, number("CLAP_COUNT", 2)))
+CLAP_SENSITIVITY = min(4.0, max(0.25, decimal("CLAP_SENSITIVITY", 1.0)))       # higher counts softer claps
+VOICE_LOCK = key("VOICE_LOCK", "auto").lower()      # auto (on once you have enrolled your voice) | owner | off
+VOICE_MATCH = decimal("VOICE_MATCH", 0.0)           # how alike a voice must be to yours (0.2 to 0.9); 0 = the level chosen when you enrolled
 TTS_ENABLED = flag("TTS_ENABLED", True)             # false = Jarvis answers in text only (much faster)
 TTS_VOICE = key("TTS_VOICE")                        # part of a Windows voice name, e.g. Zira; blank = the Windows default voice
 TTS_VOLUME = number("TTS_VOLUME", 100)              # 0 to 100

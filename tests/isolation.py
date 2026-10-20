@@ -4,6 +4,30 @@ from pathlib import Path
 from unittest import mock
 
 
+def no_voice_lock():
+    """For setUpModule: a voice print saved on this PC must not make the listening tests refuse the voices they use."""
+    import speaker
+    patcher = mock.patch.object(speaker, "lock_active", return_value=False)
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
+
+def no_whisper():
+    """For setUpModule: the tests of the listening chain must never load Whisper (they stand in for Google's service)."""
+    import stt
+    patcher = mock.patch.object(stt, "available", return_value=False)
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
+
+def no_natural_voice():
+    """For setUpModule: the tests that check the Windows voice must never load Piper or make the PC speak for real."""
+    import tts_piper
+    patcher = mock.patch.object(tts_piper, "available", return_value=False)
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
+
 def no_windows_audio():
     """For setUpModule: the tests never read or change the real Windows microphone volume (the program puts it right at start-up).
 

@@ -20,6 +20,13 @@ cffi>=2.1.1,<3                  # sounddevice's only compiled dependency (it has
 comtypes>=1.4                   # Windows' own text-to-speech (SAPI); pyttsx3 is no longer used
 pygame-ce>=2.5                  # plays the reminder sound and the theme music
 
+# ---- Phase A, all running on this PC with models in the git-ignored models/ folder (see the README: "The voice package")
+faster-whisper>=1.2             # Whisper speech recognition, offline (stt.py)
+piper-tts>=1.8                  # the natural offline voice (tts_piper.py)
+openwakeword>=0.6               # "hey Jarvis" (wakeword.py)
+sherpa-onnx>=1.13               # tells your voice from other people's (speaker.py)
+scipy>=1.14                     # resampling and the clap detector
+
 # ---- Controlling and reading this PC
 psutil>=5.9
 keyboard>=0.13.5

@@ -14,7 +14,7 @@ import re
 import traceback
 
 import gate
-from config import FACE_CHECK, USER_NAME
+from config import FACE_CHECK, INPUT_MODE, USER_NAME
 from microphone import listen
 from speech import Speak
 
@@ -62,11 +62,25 @@ def authenticate():
     return True
 
 
+def _wait_to_be_woken():
+    """What was said (or typed) to wake him. With the offline wake word or claps on, a wake by those is "hey jarvis"; when they
+    are off, or the microphone can't be used for them, it is the old way: the next phrase that is spoken or typed."""
+    if INPUT_MODE == "voice":
+        import listener
+        hint = listener.hint()
+        if hint:
+            print(f": {hint.replace(', or press START', '')} (Ctrl+C to quit)")
+            reason = listener.wait_for_wake()
+            if reason:
+                return "hey jarvis"
+    return listen().lower()
+
+
 def run():
     print("\n: Jarvis is asleep. Say or type a wake word to start: "
           + ", ".join(f"'{w}'" for w in WAKE_WORDS) + ". Say or type 'quit' to exit.\n")
     while True:
-        heard = listen().lower()
+        heard = _wait_to_be_woken()
         if any(word in heard for word in WAKE_WORDS):
             if not authenticate():
                 continue

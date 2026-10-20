@@ -15,6 +15,11 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import speech  # noqa: E402
+from tests.isolation import no_natural_voice  # noqa: E402
+
+
+def setUpModule():
+    no_natural_voice()                     # these tests are about the Windows voice; the natural one has its own tests
 
 
 class FakeToken:
