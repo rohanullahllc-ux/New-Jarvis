@@ -1249,6 +1249,104 @@ class ThirdRoundOfRecordedIssuesTests(SlightlyDifferentWordingTests):
         self.routes("open sticky notes", "open_app", "sticky notes")
 
 
+class FourthRoundOfRecordedIssuesTests(SlightlyDifferentWordingTests):
+    """The next real session: "ok start adding to do list" asked for one task only (so the next tasks were said into thin air),
+    "ok thanks number 2 ..." and "ok thank you but can you add another task ..." were answered "Happy to help." and ignored, and
+    "at another" (add another) went to the chat for 14 seconds."""
+
+    def setUp(self):
+        super().setUp()
+        L._last_kind[:] = ["", 0.0]
+        self.addCleanup(L._last_kind.__setitem__, slice(None), ["", 0.0])
+
+    def test_start_adding_to_the_list_in_any_words_starts_a_list(self):
+        for phrase in ("ok start adding to do list", "start adding to my to do list", "start adding in to do list", "start adding to the list",
+                       "begin adding to do list", "adding to do list", "add to do list", "start to do list", "continue adding tasks"):
+            reply = self.say(phrase, answers=["test number one completing my python program by tomorrow", "number 2 completing the java program", "done"])
+            self.assertEqual([call[1][0] for call in self.calls if call[0] == "add_task"],
+                             ["completing my python program by tomorrow", "completing the java program"], phrase)
+            self.assertIn("I added 2 tasks", reply, phrase)
+            self.assertIn("first task", self.questions[0], phrase)
+
+    def test_a_thank_you_in_front_of_a_request_does_not_swallow_it(self):
+        requests = (("open the notes folder", "open_notes", ("folder",)), ("show my notes", "read_notes", ("",)),
+                    ("take a screenshot", "take_screenshot", ()), ("add a task buy milk", "add_task", ("buy milk",)))
+        for ack in ("thanks", "ok thanks", "thank you", "ok thank you but", "great", "nice", "perfect", "good job", "well done", "cool", "awesome"):
+            for request, tool, args in requests:
+                self.say(f"{ack} {request}")
+                self.assertEqual([call[0] for call in self.calls], [tool], f"{ack} {request}")
+                self.assertEqual(self.calls[0][1], args, f"{ack} {request}")
+            self.assertRegex(self.no_tool(f"{ack} what time is it"), r"^It's \d{1,2}:\d{2} [AP]M\.$", ack)
+
+    def test_a_plain_thank_you_still_gets_the_reply(self):
+        for phrase in ("thanks", "thank you", "thanks a lot", "thank you very much", "thanks jarvis", "ok thanks", "great", "good job", "well done",
+                       "nice", "perfect", "thanks for that", "great thanks", "alright", "that works", "thank you so much", "cool thanks", "thanks again"):
+            self.assertIn(self.no_tool(phrase), ("You're welcome, sir.", "Always a pleasure, sir.", "Happy to help."), phrase)
+
+    def test_a_thank_you_and_a_greeting_stay_whole_when_nothing_follows(self):
+        for said, left in (("ok thanks open the notes folder", "open the notes folder"), ("thank you but can you add another task", "add another task"),
+                           ("good job now open notes", "open notes"), ("thanks a lot", "thanks a lot"), ("great thanks", "great thanks"),
+                           ("well done", "well done"), ("nice to meet you", "nice to meet you"), ("good morning", "good morning"),
+                           ("thank you very much", "thank you very much")):
+            self.assertEqual(L.normalize(said), left, said)
+
+    def test_add_another_after_a_task_or_a_note(self):
+        self.say("add buy milk to my to do list")
+        for phrase in ("at another", "add another", "ad another", "add one more", "and another", "another", "add the next one"):
+            self.routes(phrase, "add_task", "call ali", answers=["call ali"])
+            self.assertEqual(self.questions, ["What's the task?"], phrase)
+        self.say("jot down call mum")
+        self.routes("add another", "take_note", "buy tea", answers=["buy tea"])
+        self.assertEqual(self.questions, ["What should the note say?"])
+        self.routes("another", "take_note", "buy eggs", answers=["buy eggs"])
+
+    def test_another_after_a_joke_is_still_another_joke(self):
+        self.routes("tell me a joke", "get_joke")
+        self.routes("another", "get_joke")
+        self.routes("another joke", "get_joke")
+        self.routes("add another", "add_task", "call ali", answers=["call ali"])                  # (but "add another" is not a joke)
+
+    def test_with_nothing_just_added_another_is_left_to_the_chat(self):
+        self.assertIsNone(self.no_tool("another"))
+        self.assertIsNone(self.no_tool("number 2 completing the java program by tomorrow"))
+
+    def test_what_was_just_added_is_forgotten_after_a_few_minutes(self):
+        self.say("add buy milk to my to do list")
+        later = SimpleNamespace(monotonic=lambda: L._last_kind[1] + L.RECENT + 1)
+        with mock.patch.object(L, "time", later):
+            self.assertIsNone(self.no_tool("another"))
+            self.assertIsNone(self.no_tool("number 2 completing the java program"))
+
+    def test_numbered_tasks_said_right_after_adding_one_continue_the_list(self):
+        self.say("add buy milk to my to do list")
+        self.routes("number 2 completing the java program", "add_task", "completing the java program")
+        self.routes("ok thanks number 3 call ali tomorrow", "add_task", "call ali tomorrow")
+        self.routes("task number four pay the rent", "add_task", "pay the rent")
+        self.routes("next task buy bread", "add_task", "buy bread")
+
+    def test_a_sentence_about_adding_later_does_not_save_a_task_called_later(self):
+        self.say("thanks i will add another task later", answers=[""])
+        self.assertEqual([call for call in self.calls if call[0] == "add_task"], [])
+        self.assertEqual(self.questions, ["What's the task?"])
+
+    def test_a_task_answer_loses_the_words_in_front_of_it_but_keeps_its_capitals(self):
+        self.say("ok start adding to do list", answers=["ok thanks number 2 Call Ali about the Java program", "Well done now buy Bread", "done"])
+        self.assertEqual([call[1][0] for call in self.calls if call[0] == "add_task"], ["Call Ali about the Java program", "buy Bread"])
+        self.assertEqual(L.without_lead_ins("Ok, now could you please Open the Notes, sir"), "Open the Notes")
+        self.assertEqual(L.without_lead_ins("Great idea"), "Great idea")
+
+    def test_repeating_add_another_task_inside_the_list_still_adds_just_the_task_on_its_day(self):
+        self.say("ok start adding to do list",
+                 answers=["ok thank you but can you add another task in the test folder that completing java program by tomorrow", "done"])
+        self.assertEqual(self.calls, [("add_task", ("completing java program", L._day_from_word("tomorrow")), {})])
+        self.say("start adding tasks", answers=["write the report", "make a note of the meeting", "done"])               # (a task may start with a verb)
+        self.assertEqual([call[1][0] for call in self.calls], ["write the report", "make a note of the meeting"])
+
+    def test_a_task_with_a_day_loses_its_dangling_by(self):
+        self.routes("ok thank you but can you add another task in the test folder that completing java program by tomorrow",
+                    "add_task", "completing java program", L._day_from_word("tomorrow"))
+
+
 class RealBackendTests(unittest.TestCase):
     """The same commands with the real tools on a temporary DataBase: what is on disk afterwards is what counts."""
 
@@ -1265,11 +1363,28 @@ class RealBackendTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
         L.NLU.reset()
         self.addCleanup(L.NLU.reset)
+        L._last_kind[:] = ["", 0.0]
+        self.addCleanup(L._last_kind.__setitem__, slice(None), ["", 0.0])
 
     def say(self, phrase, answers=()):
         script = list(answers)
         with redirect_stdout(io.StringIO()):
             return L.LocalReply(phrase, lambda question: script.pop(0) if script else "")
+
+    def test_start_adding_to_do_list_saves_every_task_in_the_file_without_the_dictated_numbers(self):
+        from JarvisAdvancedBot.tools import productivity
+        reply = self.say("ok start adding to do list", answers=["test number one completing my python program by tomorrow",
+                                                                "number 2 completing the java program", "done"])
+        self.assertIn("I added 2 tasks", reply)
+        self.assertEqual(productivity._read_tasks(datetime.date.today()),
+                         ["completing my python program by tomorrow", "completing the java program"])
+
+    def test_a_thank_you_in_front_of_a_request_still_does_it_and_the_next_task_follows(self):
+        from JarvisAdvancedBot.tools import productivity
+        self.say("ok thanks add a task buy milk")
+        self.say("at another", answers=["call ali"])
+        self.say("ok thanks number 3 pay the rent")
+        self.assertEqual(productivity._read_tasks(datetime.date.today()), ["buy milk", "call ali", "pay the rent"])
 
     def test_a_list_started_with_an_ing_verb_ends_up_in_the_task_file(self):
         from JarvisAdvancedBot.tools import productivity

@@ -13,6 +13,7 @@ import difflib
 import random
 import re
 import threading
+import time
 import traceback
 
 import psutil
@@ -45,13 +46,49 @@ def intent(*patterns):
 
 # Words in front of a command that are not part of it, in whatever order and number people say them: "ok now open the task folder",
 # "so what time is it", "alright, could you please show my notes", "i want you to take a screenshot", "let's make a to do list".
-_FILLERS = (r"hey|ok|okay|um+|uh+|er+|hmm+|oh|ah|well(?! done)|so|now|then|and|also|just|right|alright|all right|anyway|actually|sorry|"
-            r"i mean|no i mean|i told you|i said|as i said|by the way")
+# A "thanks" or "great" in front of a real request is only a lead-in ("ok thanks open the notes folder"); on its own, or followed by
+# more politeness ("thanks a lot", "great job"), it is the thank-you.
+_THANKS_EXTRA = (r"heaps|a million|a bunch|kindly|stuff|answer|idea|reply|response|effort|info|information|advice|choice|pal|bro|dude|"
+                 r"friend|champ|boss")
+_POLITE_TAIL = (r"(?:a lot|so much|very much|a ton|again|sir|man|mate|buddy|for|that|this|it|to|job|work|one|thanks|thank you|"
+                rf"i appreciate|much appreciated|{_THANKS_EXTRA})")
+_FILLERS = (r"hey|ok|okay|um+|uh+|er+|hmm+|oh|ah|well(?! done)|so|now|then|and|but|plus|also|just|right|alright|all right|anyway|actually|"
+            r"sorry|i mean|no i mean|i told you|i said|as i said|by the way|"
+            r"(?:thanks|thank you|thankyou|thx|great|nice|perfect|awesome|excellent|cool|brilliant|wonderful|fantastic|amazing|"
+            rf"good job|well done)(?![,.]?\s+{_POLITE_TAIL}\b)")
 _ASKING = (r"(?:can|could|would|will) (?:you|u)(?: please)?|(?:would|do) you mind|(?:i|we) (?:want|need|would like|wanna|have to|got to|gotta) (?:you )?to|"
            r"(?:i|we)'d like (?:you )?to|let's|lets|let us|go ahead and|you (?:can|may|should|could)|please|kindly|is it possible to|"
            r"i was wondering if you could|help me(?: to)?(?= (?:make|create|add|write|build|find|open|set|start|plan|take|keep|schedule)\b)")
 _LEAD = re.compile(rf"^(?:{_FILLERS}|{_ASKING})\b[,.]?\s+(?=\w)")
 _TRAIL = re.compile(r"(?:[\s,]+(?:please|sir|for me|if you can|if you could|if you don't mind|quickly|at once|immediately))+$")
+
+
+_LEAD_ANY_CASE = re.compile(_LEAD.pattern, re.I)
+
+
+def without_lead_ins(text):
+    """``text`` without the words in front of it that are not part of it ("ok thanks number 2 completing the program"), but with
+    its capital letters kept: for a task or a note that is going to be written down."""
+    text = text.strip()
+    for _ in range(10):
+        shorter = _LEAD_ANY_CASE.sub("", text, count=1)
+        if shorter == text:
+            break
+        text = shorter
+    return _TRAIL.sub("", text).strip()
+
+
+def _task_from(answer):
+    """(task, day) from what was said in answer to "What's the task?": the words around it taken away ("ok thanks number 2 ..." or
+    "add another task in the test folder that ..."), with the capital letters kept, and the day it names ("... by tomorrow" in an
+    add request) kept apart ("" when none)."""
+    cleaned = without_lead_ins(answer)
+    if re.match(r"(?:add|at|put|write|create|make)\b", cleaned, re.I):
+        frame = Frames.parse(cleaned)
+        if frame and frame.action == "add" and frame.nouns == {"task"} and frame.text:
+            found = re.search(re.escape(frame.text), cleaned, re.I)
+            return (found.group(0) if found else frame.text), (_day_from_word(frame.day) if frame.day else "")
+    return Frames.tidy_task(cleaned), ""
 
 
 def normalize(text):
@@ -161,8 +198,14 @@ def how_are_you(m, ask):
     return "All systems running smoothly, sir. How can I help?"
 
 
-@intent(r"^(?:thanks|thank you|great|good job|well done|nice)\b",
-        r"^(?:perfect|awesome|excellent|cool|brilliant|wonderful|alright|all right|got it|understood|that works)$")
+_PLEASANTRY = (r"(?: (?:a lot|so much|very much|a ton|again|sir|man|mate|buddy|job|work|one|thanks|thank you|i appreciate it|"
+               rf"much appreciated|{_THANKS_EXTRA}|for (?:that|this|it|your help|helping|everything|the help|the info|the information|"
+               r"telling me|doing that)|that(?:'s| is) all|that was (?:great|helpful|good|perfect|nice|useful)))*")
+
+
+@intent(rf"^(?:thanks|thank you|thankyou|thx|cheers){_PLEASANTRY}$",
+        rf"^(?:great|good job|well done|nice|perfect|awesome|excellent|cool|brilliant|wonderful|fantastic|amazing|alright|all right|got it|"
+        rf"understood|that works|very good){_PLEASANTRY}$")      # (only a thank-you: "thanks open the notes" is the request "open the notes")
 def thanks(m, ask):
     return random.choice(["You're welcome, sir.", "Always a pleasure, sir.", "Happy to help."])
 
@@ -288,6 +331,18 @@ LIST_DAY = r"(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|fr
 STARTING = r"(?:make|making|create|creating|start|starting|begin|beginning|build|building|prepare|preparing|set up|setting up|write|writing)"
 
 
+_last_kind = ["", 0.0]          # what Jarvis last did, and when: "task" or "note" (added), "fun" (a joke...), for "add another"
+RECENT = 300                    # seconds a task or note just added counts as "what we were doing"
+
+
+def _remember(kind):
+    _last_kind[0], _last_kind[1] = kind, time.monotonic()
+
+
+def _recent(kind):
+    return _last_kind[0] == kind and time.monotonic() - _last_kind[1] < RECENT
+
+
 def _take_tasks(ask, day, first=""):
     """Take the tasks one at a time. A task said with a time ("call Ali at 5 pm") also gets a reminder at that time.
     ``first`` is a task that was already said in the request ("make a to do list and add call Ali")."""
@@ -301,14 +356,19 @@ def _take_tasks(ask, day, first=""):
         if not spoken or FINISHED.fullmatch(spoken):
             break
         clock = _clock_time(spoken)
-        task = Frames.tidy_task(_as_typed(re.sub(r"\s+(?:at|for)\s+\d.*$", "", spoken).strip()) if clock else answer)
-        T.add_task(task, day)
+        own_day = ""
+        if clock:
+            task = Frames.tidy_task(_as_typed(re.sub(r"\s+(?:at|for)\s+\d.*$", "", spoken).strip()))
+        else:
+            task, own_day = _task_from(answer)
+        T.add_task(task, own_day or day)
         if clock:
             T.set_reminder(message=task, at_time=clock)
         added.append(f"{task} at {clock}" if clock else task)
         question = "Added. What is the next task, or are you done?"
     if not added:
         return "Okay, no tasks added."
+    _remember("task")
     return f"Done sir. I added {len(added)} task{'' if len(added) == 1 else 's'}: " + "; ".join(added) + "."
 
 
@@ -333,9 +393,13 @@ MANY_TASKS = re.compile(rf"(?:{MANY} )*(?:tasks|things|items|stuff|to ?dos|erran
 NO_TASK = re.compile(r"(?:(?:a|an|the|my|new|another|one|next) )*(?:task|item|thing|to ?do)?|something|anything|it|that|this")
 
 
+ADDING_TO = r"(?: (?:to|in|into|on|onto))?(?: (?:my|the|your))? (?:(?:to ?do|to-do|todo|tasks?) list|to ?do|to-do|todo|list)"
+
+
 @intent(rf"^(?:(?:start|begin|keep|continue|resume) )?adding(?: {MANY})* {THINGS}{ONTO}{LIST_DAY}$",
         rf"^add (?:{MANY} )+{THINGS}{ONTO}{LIST_DAY}$",
-        rf"^add (?:things|stuff|items|tasks|to ?dos){ONTO}{LIST_DAY}$")
+        rf"^add (?:things|stuff|items|tasks|to ?dos){ONTO}{LIST_DAY}$",
+        rf"^(?:(?:start|begin|keep|continue|resume) )?(?:adding|add){ADDING_TO}{LIST_DAY}$")
 def add_several_tasks(m, ask):
     """"add some tasks", "start adding things to the list": more than one task, taken one at a time like a new list."""
     named = m.groupdict().get("day") or ""
@@ -352,11 +416,52 @@ def add_task(m, ask):
         return _take_tasks(ask, _day_from_word("today"))
     if NO_TASK.fullmatch(task.lower()):                      # "add a task", "add something": the task itself is still to come
         task = ""
-    task = Frames.tidy_task(task) if task else ask("What's the task?")
-    return T.add_task(task) + "." if task else "Okay, nothing added."
+    own_day = ""
+    task = Frames.tidy_task(task) if task else None
+    if task is None:
+        task, own_day = _task_from(ask("What's the task?"))
+    if task:
+        _remember("task")
+    return (T.add_task(task, own_day) if own_day else T.add_task(task)) + "." if task else "Okay, nothing added."
 
 
-WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+ADD_VERB = r"(?:add|at|ad|put)"                               # ("add" is very often heard as "at")
+
+
+@intent(rf"^(?:{ADD_VERB} )?(?:another|one more|another one|a new one|the next one|next one)$")
+def add_another(m, ask):
+    """"add another" (or just "another", or "at another") right after adding a task or a note: one more of the same."""
+    said_add = bool(re.match(rf"{ADD_VERB}\b", m.string))
+    if _last_kind[0] == "fun" and not said_add:
+        return None                                               # "another" after a joke is another joke
+    kind = "note" if _recent("note") else "task" if (_recent("task") or said_add) else ""
+    if not kind:
+        return None                                               # nothing to add one more of: for the chat
+    if kind == "note":
+        text = ask("What should the note say?").strip()
+        if not text:
+            return "Okay, no note then."
+        _remember("note")
+        return T.take_note(text) + "."
+    task, own_day = _task_from(ask("What's the task?"))
+    if not task:
+        return "Okay, nothing added."
+    _remember("task")
+    return (T.add_task(task, own_day) if own_day else T.add_task(task)) + "."
+
+
+@intent(r"^(?:(?:task|test|text|tas|item) )?(?:number|num|#) ?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten) (?P<task>.{4,})$",
+        r"^(?:next|another|new) task (?P<task>.{4,})$")
+def continue_task_list(m, ask):
+    """Right after adding a task, "number 2 completing the java program" is the next task of the same list."""
+    if not _recent("task"):
+        return None                                               # not in the middle of a list: this is for the chat
+    task = Frames.tidy_task(_as_typed(m["task"].strip()))
+    _remember("task")
+    return T.add_task(task) + "."
+
+
+WEEKDAYS =("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 
 
 def _day_from_word(word):
@@ -374,6 +479,7 @@ def _day_from_word(word):
 
 @intent(r"^schedule (?P<task>.+?)(?: (?:for|by|on|until|before) (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?$")
 def schedule_task(m, ask):
+    _remember("task")
     return T.add_task(_as_typed(m["task"].strip()), _day_from_word(m["day"] or "")) + "."
 
 
@@ -466,6 +572,8 @@ def forget_one_fact(m, ask):
         r"^(?:(?:start|begin|resume|keep)(?: taking| writing| making)?|take|make|write)(?: some| a few| more| my)?(?: new)? notes$")
 def start_notes(m, ask):
     text = ask("Okay sir. What should the note say?").strip()
+    if text:
+        _remember("note")
     return T.take_note(text) + "." if text else "Okay, no note then."
 
 
@@ -579,6 +687,7 @@ def _by_frame(text, ask):
         item = frame.text or ask("What's the task?" if noun == "task" else "What should the note say?").strip()
         if not item:
             return "Okay, nothing added."
+        _remember(noun)
         return ((T.add_task(item, day) if day else T.add_task(item)) if noun == "task" else T.take_note(item)) + "."
     if not nouns:
         if frame.which == "all":
@@ -639,6 +748,7 @@ NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note\b|note (?:t
 
 @intent(r"^jot(?: down)?[:,]? (?P<text>(?!a task\b).+)$")
 def jot_note(m, ask):
+    _remember("note")
     return T.take_note(_as_typed(m["text"].strip())) + "."
 
 
@@ -646,6 +756,8 @@ def jot_note(m, ask):
 def take_note(m, ask):
     text = re.sub(NOTE_START + r"(?: that| saying| of| about)?[:,]?\s*", "", m.string).strip()
     text = _as_typed(text) or ask("What should the note say?")
+    if text:
+        _remember("note")
     return T.take_note(text) + "." if text else "Okay, no note then."
 
 
@@ -1462,6 +1574,7 @@ EXAMPLES = [
 
 
 OPEN_MEANS_OPEN = {"note", "notes", "my notes", "screenshot"}
+STARTS_A_NEW_ONE = {"to do", "todo", "to do list", "tasks", "task list"}
 
 
 def _canonical(text):
@@ -1469,6 +1582,8 @@ def _canonical(text):
     core = _TRAILING.sub("", _LEADING.sub("", text)).strip()
     if core in OPEN_MEANS_OPEN and re.match(r"(?:open|launch|start|run)\b", text):
         return text                                # "open the screenshot" is not "take a screenshot", nor "open the note" "show my notes"
+    if core in STARTS_A_NEW_ONE and re.match(r"start\b", text):
+        return text                                # "start to do list" begins a list; it is not "what's on my to do list"
     return BARE_WORDS.get(core, text)
 
 
@@ -1594,6 +1709,7 @@ def _run_patterns(text, ask, specific_only=False):
             reply = handler(match, ask)
             if reply is not None and handler in (joke, random_fact, bored, advice, dog):
                 _last_fun[0] = text
+                _remember("fun")
         except ToolError as e:
             return str(e)
         except Exception:
@@ -1623,7 +1739,7 @@ def LocalReply(query, ask=lambda question: "", guessed=False):
                 return str(error)
             if reply is not None:
                 return reply
-    if ANOTHER.search(text) and _last_fun[0]:
+    if ANOTHER.search(text) and _last_fun[0] and _last_kind[0] == "fun" and not re.match(rf"{ADD_VERB}\b", text):
         text = _last_fun[0]                              # "another", "that's not funny, another one": the same kind again
     plain = None if guessed else imperative(text)
     if plain:                                            # "making to do list": read as "make to do list", but only by patterns that

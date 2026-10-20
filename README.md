@@ -156,9 +156,15 @@ Before any of that, the words around a command are taken away, in any order and 
 "sir", "for me", "if you can" ("ok now could you please open the task folder, sir" is "open the task folder"). The "-ing"
 form that speech recognition often writes is read as the plain command ("making to do list", "opening task folder",
 "taking notes"), but only for commands that mean something specific, so "opening hours of the bank" is still a question.
+A "thanks", "thank you", "great", "nice" or "good job" in front of a request is a lead-in too ("ok thanks open the notes
+folder" opens them); only a sentence that is nothing but a thank-you ("thanks a lot", "great job") gets the "you're welcome".
 
 * **Several tasks at once:** "add some tasks", "start adding things to the list" and "make a to do list" all take the tasks
-  one after another until you say done. "make a to do list and add call Ali" adds call Ali straight away.
+  one after another until you say done ("start adding to do list" does too). "make a to do list and add call Ali" adds call Ali
+  straight away. Inside the list you can say the task as you like: "ok thanks number 2 completing the program" is saved as
+  "completing the program", and "add another task ... by tomorrow" goes on tomorrow's list.
+* **Right after adding a task or a note** (for five minutes): "add another" (even heard as "at another"), "one more" and "number 2
+  completing the java program" add the next one. After a joke, "another" is still another joke.
 * **Folders by name:** "open the python folder" finds a folder called Python in Documents, Downloads, Desktop, Pictures, Music,
   Videos or the home folder (up to two levels down). Speech recognition often hears "task" as "test" or "text" and "note" as
   "not"; if no folder has the name he says so and opens the tasks or notes folder instead. A name he cannot find is

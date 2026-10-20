@@ -84,6 +84,21 @@ class RepairTests(unittest.TestCase):
         for text in ("add buy milk to my tasks", "add a task call ali", "add a note buy milk"):
             self.assertFalse(F.parse(text).many, text)
 
+    def test_a_task_loses_the_number_it_was_dictated_with_and_nothing_else(self):
+        for said, task in (("test number one completing my python program by tomorrow", "completing my python program by tomorrow"),
+                           ("number 2 completing the java program", "completing the java program"), ("task 2 call ali", "call ali"),
+                           ("task number three pay rent", "pay rent"), ("# 4 buy bread", "buy bread"), ("at call ali", "call ali")):
+            self.assertEqual(F.tidy_task(said), task, said)
+        for kept in ("number crunching for the report", "2 liters of milk", "call ali", "test the new login page", "no one to call",
+                     "no more coffee", "task force meeting", "number 5"):
+            self.assertEqual(F.tidy_task(kept), kept, kept)
+
+    def test_a_dangling_word_is_trimmed_from_what_to_add_and_a_time_word_is_not_a_task(self):
+        found = F.parse("add another task in the test folder that completing java program by tomorrow")
+        self.assertEqual((found.text, found.day), ("completing java program", "tomorrow"))
+        for text in ("i will add another task later", "add a task now", "add a task again"):
+            self.assertEqual(F.parse(text).text, "", text)
+
     def test_the_ing_forms_of_add_and_remove_are_understood(self):
         self.assertEqual(frame("deleting all the notes"), ("remove", ("note",), "all", 0, "", ""))
         self.assertEqual(frame("removing the last task")[:3], ("remove", ("task",), "last"))

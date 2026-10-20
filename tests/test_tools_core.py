@@ -513,6 +513,13 @@ class NotesAndTasksTests(ToolCase):
         self.assertTrue(listing.startswith("Recent notes: "))
         self.assertIn("and so on", listing)
 
+    def test_the_notes_folder_opens_even_when_there_are_no_notes_yet(self):
+        with mock.patch.object(productivity.os, "startfile", create=True) as start:
+            self.assertEqual(T.open_notes(which="folder"), "Opened the notes folder")
+        self.assertEqual(Path(start.call_args[0][0]).name, "Notes")
+        self.assertTrue((self.db / "Notes").is_dir())
+        self.fails(lambda: T.open_notes(), "no saved notes")                    # (a note to open is another matter)
+
     def test_opening_a_note_opens_the_newest_file_or_the_folder(self):
         self.fails(lambda: T.open_notes(), "no saved notes")
         T.take_note(text="older")

@@ -17,6 +17,7 @@ ADD = {"add", "added", "adding", "create", "creating", "make", "making", "put", 
        "append", "appending", "new"}
 QUANTITY = {"some", "few", "several", "more", "many", "multiple", "couple", "bunch", "lots", "lot"}      # "add SOME tasks" is not a task called "some"
 PLURAL_THINGS = {"tasks", "items", "things", "stuff", "todos", "errands", "chores"}
+WHEN_ONLY = {"later", "now", "again", "soon", "too", "also", "today", "tonight", "tomorrow", "here", "there", "please", "then"}
 TASK = {"task", "tasks", "todo", "todos", "item", "items", "errand", "errands", "chore", "chores", "assignment", "assignments"}
 TASK_SLIPS = {"tas", "tusk", "tusks", "test", "tests", "text", "texts", "taste", "tasked"}     # how "task" is often heard
 NOTE = {"note", "notes", "memo", "memos"}
@@ -78,11 +79,17 @@ PRONOUNS = re.compile(r"^(?:(?:and|also|then|next|add|ok|okay|um|uh|at|so|that|t
                       r"we will|we need to|let me|remind me to|to)\s+)?")
 
 
+_NUMBER_WORD = r"(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)"
+LABEL = re.compile(rf"^(?:(?:task|test|text|tas|item)\s+)?(?:number|num|#)\s*{_NUMBER_WORD}\b[:.,-]?\s+(?=\S)"
+                   rf"|^(?:task|item)\s+{_NUMBER_WORD}\b[:.,-]?\s+(?=\S)")        # "task number one ..." (heard as "test number one ...")
+
+
 def tidy_task(text):
-    """A task as it was said, without the speech around it: "at call ali" / "i will call ali" -> "call ali"."""
+    """A task as it was said, without the speech around it: "at call ali" / "i will call ali" -> "call ali", and without the
+    number it was dictated with: "number 2 completing the java program" -> "completing the java program"."""
     cleaned = text.strip()
     for _ in range(3):
-        cleaned = PRONOUNS.sub("", cleaned, count=1).strip()
+        cleaned = LABEL.sub("", PRONOUNS.sub("", cleaned, count=1).strip(), count=1).strip()
     return cleaned or text.strip()
 
 
@@ -139,6 +146,9 @@ def parse(text) -> Optional[Frame]:
         item = tidy_task(" ".join(rest[meaningful[0]:meaningful[-1] + 1])) if meaningful else ""
         if item and not (nouns & {"task"}) and "note" not in nouns:
             item = ""
+        item = re.sub(r"(?:\s+(?:by|for|on|until|before|at|due|in|to|and|then|of|that|with|from))+$", "", item)   # ("... by" once "tomorrow" is taken out)
+        if item in WHEN_ONLY:
+            item = ""                                        # "i will add another task LATER": a time, not a task
         many = not item and bool(set(rest) & (QUANTITY | PLURAL_THINGS))
     else:
         left = [w for i, w in enumerate(rest) if i not in used and w not in FILLER and w not in REMOVE and w not in ADD

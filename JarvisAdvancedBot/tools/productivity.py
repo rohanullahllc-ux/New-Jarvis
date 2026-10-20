@@ -62,12 +62,15 @@ def open_notes(which: Literal["latest", "folder"] = "latest") -> str:
     Args:
         which: "latest" for the most recent note, "folder" for the Notes folder.
     """
+    if which == "folder":                                       # the folder opens even when it is still empty, like the tasks folder
+        os.startfile(_common.folder("Notes"))
+        return "Opened the notes folder"
     notes_dir = _common.DB / "Notes"
     notes = sorted(notes_dir.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True) if notes_dir.exists() else []
     if not notes:
         raise ToolError("There are no saved notes yet.")
-    os.startfile(notes_dir if which == "folder" else notes[0])
-    return "Opened the notes folder" if which == "folder" else f"Opened your latest note: {_note_body(notes[0])[:200]}"
+    os.startfile(notes[0])
+    return f"Opened your latest note: {_note_body(notes[0])[:200]}"
 
 
 @beta_tool
