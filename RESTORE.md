@@ -80,5 +80,6 @@ python JarvisGUI.py                         start him
 | `models/` | project folder | the downloaded models (can be downloaded again) |
 | `training/nlu_real.txt` | `training/` | the sentences you really said, used to measure the language model |
 | Ollama's models | `C:\Users\<you>\.ollama` | downloaded again with `ollama pull` |
+| `Jarvis Personal Archive` | `C:\Users\<you>\Documents` | your books, videos, music, photos, school certificate and the old GUI artwork, moved out of the project in the 2026 rebuild (Jarvis does not need them to run; they are on the HDD in `Backup-2026-10-20\C-Users-not-yet-backed-up\Documents`) |
 
 The admin panel's **Backup and restore** page (or `python backup_jarvis.py --to F:\`) saves all of the above except the models and Ollama's models into one folder.

@@ -38,8 +38,13 @@ This file is loaded automatically by Claude Code. It gives you the rules, the ma
   The wizard's real downloads and installs (VC++ runtime, Python packages, Ollama) were tested with pretend effects and by a dry run on the real PC, not by a full install on a bare Windows:
   the first real run on the new Windows 11 Lite is the live test; read `Logs/setup.log` if it misbehaves.
 * **The owner's "most advanced idea" (Phase I) is still undescribed.** Ask them when they are ready; do not guess.
-* **Backups (2026-10-20):** GitHub (private, code only: no `.env`, models, personal data) and the HDD `F:\Backup-2026-10-20\` (full copy: `Jarvis\New Jarvis`, Ollama models, `D-drive-not-yet-backed-up`,
-  `D-drive-skipped-earlier`, `Jarvis-FINAL`, a README and a SHA-256 manifest). A fresh PC is restored with `Setup-Jarvis.bat` (see `MANUAL.md` section 2.2).
+* **Backups (2026-10-20):** GitHub (private, code only: no `.env`, models, personal data) and the HDD `F:\Backup-2026-10-20\` (the README text file in it describes every folder, `MANIFEST.sha256` has the SHA-256 of every file):
+  `Jarvis-FINAL\New Jarvis` (the finished project with `.env`, `DataBase`, `.git`, `.venv`), `Jarvis` (an earlier copy, the Ollama models and Ollama's key), `D-drive-not-yet-backed-up`, `D-drive-skipped-earlier`,
+  `D-drive-final-pass` (everything from D:), `C-Users-not-yet-backed-up` (the personal files below, plus Downloads files that had no copy) and `Jarvis-claude-notes` (the memory notes and plans of the Claude sessions).
+  A fresh PC is restored with `Setup-Jarvis.bat` (see `MANUAL.md` section 2.2).
+* **The owner's personal files are NOT in the project folder or in git.** In the 2026-10-17 rebuild the books, Minecraft videos, music, photos, school certificate, study material and old GUI artwork were moved (not deleted) out of
+  `DataBase/` into `C:\Users\Rohaan & Co\Documents\Jarvis Personal Archive` (the README text file in it explains each folder; `gui/make_assets.py` rebuilds the window's pictures from the artwork in it). Never move or delete them, and keep
+  them out of the repository. They are also on the HDD in `C-Users-not-yet-backed-up\Documents\`; on a new PC copy that folder back into Documents.
 * Known odd things in the owner's own files: `.env` had `STARTUP_GREETING=long` (invalid; the admin panel flags it) and a plain-text `JARVIS_PASSWORD` (the wizard offers to scramble it).
 
 ## 3. Running things

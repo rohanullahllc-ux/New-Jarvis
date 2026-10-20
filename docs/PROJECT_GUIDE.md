@@ -111,7 +111,7 @@ Qt signals and `queue.Queue`; the session thread asks the window for things (lik
 | `session.py` | `SessionController` (the session thread -> signals) and `WakeController` (wake word/claps -> "woke"). |
 | `login_dialog.py` | The unlock dialog (password, optional camera). |
 | `theme.py` | Colours and the one stylesheet used by every Qt window (including the admin panel). |
-| `sprites.py`, `make_assets.py` | The animated ring/earth/hero pictures from sprite sheets in `gui/resources/`. |
+| `sprites.py`, `make_assets.py` | The animated ring/earth/hero pictures from sprite sheets in `gui/resources/`. The original GIF artwork is not in the repo: it is in `Documents\Jarvis Personal Archive\GUI Material\Original window artwork` (see its README). |
 | `admin_panel.py` | The admin panel (section 8). `admin_widgets.py`: `SettingRow`, `PasswordPrompt`, `ChangePasswordDialog`, `ItemDialog`, `run_in_console`. |
 | `utils/calculator.py`, `calendar_view.py`, `currency_converter.py`, `style.py`, `launcher.py` | The small CustomTkinter tool windows and what opens them as separate programs. |
 
