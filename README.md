@@ -43,6 +43,11 @@ touch:
 | `SPEECH_LANGUAGE`, `SPEECH_LANGUAGE_FALLBACK` | The accent Google's speech recognition expects: `en-pk` (default), `en-in`, `en-us`, `en-gb`. Try another if Jarvis mishears you; the fallback is tried once when the first understood nothing |
 | `MIC_BEEP` | A short beep when the microphone has just been opened: it means "speak now" |
 | `MIC_VOLUME` | If Windows has the microphone muted or under 50 percent at start-up, Jarvis sets it to this many percent (80). `0` = never touch the Windows setting |
+| `STT_ENGINE`, `STT_MODEL` | Hearing: `auto` (Whisper on this PC, Google only when Whisper heard nothing), `whisper` (never Google) or `google`; model `tiny.en` (quickest), `base.en` (default) or `small.en` (most accurate, slowest) |
+| `TTS_ENGINE`, `PIPER_VOICE` | His voice: `auto` (the natural Piper voice when installed), `piper` or `windows`; which Piper voice (`python tts_piper.py --demo` plays them all) |
+| `WAKE_WORD`, `WAKE_SENSITIVITY` | "hey Jarvis" wakes him while he sleeps with the window open (on this PC); higher sensitivity hears it more easily and wakes by mistake more |
+| `CLAP_WAKE`, `CLAP_COUNT`, `CLAP_SENSITIVITY` | Clapping (2 times by default) wakes him; higher sensitivity counts softer claps |
+| `VOICE_LOCK`, `VOICE_MATCH` | Only your voice: `auto` (on once you have run `python enroll_voice.py`), `owner` or `off`; how alike a voice must be to yours (0 = the level chosen when you enrolled) |
 | `STARTUP_GREETING` | `short` (one sentence), `full` (adds weather, time table, to-do list, low battery) or `silent` |
 | `GUI_ANIMATIONS` | `false` gives still pictures in the window on a slow PC |
 | `ANTHROPIC_API_KEY` | Optional. With it Jarvis uses Claude; without it, the free command understanding and chat below |
@@ -115,6 +120,49 @@ within a few seconds.
   Windows alone and only warn. Say "what is my microphone volume", "set the microphone volume to 80", "raise the mic" or
   "unmute the microphone", or run `python audio_levels.py` (`--mic 80` sets it).
 * Check the whole chain with `python microphone.py` (it asks you to say a sentence and shows the levels).
+
+## The voice package: his own voice, hearing, wake word, claps, and only your voice
+
+Everything here runs on this PC, with no internet and no account. Each part is optional, and when one cannot be used Jarvis says so and
+falls back to the old way (Google for hearing, the Windows voice for speaking, the START button for waking).
+
+| Part | What it does | File | Models (git-ignored, in `models/`) |
+|---|---|---|---|
+| Natural voice | Piper speaks every reply; the next sentence is made while the current one is spoken | `tts_piper.py` | `python -m piper.download_voices en_GB-alan-medium --download-dir models/piper` |
+| Hearing | Whisper turns your recorded phrase into words (about 2 seconds for a command on this CPU); Google is only the second opinion | `stt.py` | `python stt.py --download` |
+| Wake word | "hey Jarvis" wakes him, then he asks for the password as usual | `wakeword.py`, `listener.py` | `python wakeword.py --download` |
+| Claps | Two claps wake him (the same password question); costs almost no CPU | `clap.py` | none |
+| Your voice only | A voice print of you; any other voice is heard and ignored | `speaker.py`, `enroll_voice.py` | `python speaker.py --download` |
+
+**Waking him.** While the window is open and he is asleep, he listens (6 percent of one CPU core) for "hey Jarvis" and the clap pattern, and the
+window says so. Either one does what pressing START does: the password dialog appears. Nothing is recorded or sent anywhere, and the sound is
+thrown away as it is heard. In the terminal (`python Startup.py`) the same detectors wake him.
+
+**Only your voice.** Run `python enroll_voice.py` once: you read about 16 sentences (three minutes) and your voice print is saved in
+`DataBase/voiceprint.npz` (git-ignored; `python enroll_voice.py --delete` removes it). From then on (`VOICE_LOCK=auto`) every phrase is
+compared with it, "hey Jarvis" must be in your voice, and anything else is ignored with a note in the log. `python enroll_voice.py --test`
+shows the score of everything you say, live, so you can see the margin. It is a convenience, not a lock: a recording of your voice can pass
+it, a cold or a noisy room can make it refuse you, and the password is still what lets anyone in. The typed box and the buttons always work,
+and saying or typing "turn off the voice lock" (or `VOICE_LOCK=off`) switches it off; "turn on the voice lock" switches it on again.
+
+**Tuning on your own PC and voice**
+* `python voice_test.py` records you reading ten sentences and shows, side by side, what Whisper and Google heard, how long Whisper took,
+  and whether the voice lock accepted you. If Whisper is too slow, set `STT_MODEL=tiny.en`; if it mishears you, try `small.en`.
+* `python clap.py --live` prints every loud sound and what the clap detector made of it (a clap, a thump, a voice...). Raise
+  `CLAP_SENSITIVITY` if your claps are missed, lower it if typing or talking wakes him.
+* `WAKE_SENSITIVITY` is the score "hey Jarvis" must reach (0.5 by default): lower it if he does not wake, raise it if he wakes by mistake.
+
+**What was measured while building it** (synthetic voices and made-up claps, because they can be repeated exactly; your own voice and
+claps are what `voice_test.py` and `clap.py --live` are for): Piper makes speech seven to ten times faster than it is spoken; Whisper
+`base.en` took 2 seconds for a command, and 20 of 20 test commands reached the right command (15 to 16 of them word for word); "hey Jarvis"
+scored about 1.0 in four voices and about 0 for most other phrases ("hey Travis" scores high, which is why the voice check backs it up);
+the clap detector found 36 of 36 double claps in rooms from quiet to noisy and gave no false pattern in 30 minutes of continuous talking;
+on real human recordings the voice model accepted the enrolled speaker every time (0.75 to 0.82) and rejected two other people every time
+(0.28 or less).
+
+**A thing to know about this PC:** importing the ONNX runtime after PyQt5 crashes the whole program on this Windows, so `gui/__init__.py`
+loads the voice libraries first (`native_libs.py`). If you ever write a script that imports PyQt5 before them, the voice parts stay off
+instead of crashing.
 
 ## Understanding loosely worded commands (a model you train yourself)
 

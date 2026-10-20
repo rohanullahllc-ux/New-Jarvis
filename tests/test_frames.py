@@ -99,6 +99,14 @@ class RepairTests(unittest.TestCase):
         for text in ("i will add another task later", "add a task now", "add a task again"):
             self.assertEqual(F.parse(text).text, "", text)
 
+    def test_by_at_the_start_of_what_is_written_down_is_buy_but_a_deadline_is_left_alone(self):
+        for heard, written in (("by milk", "buy milk"), ("By bread and eggs", "Buy bread and eggs"), ("by mill", "buy mill"), ("by tea", "buy tea")):
+            self.assertEqual(F.buy_not_by(heard), written)
+            self.assertEqual(F.tidy_task(heard), written)
+        for kept in ("by tomorrow", "by friday", "by the end of the week", "by 5 pm", "go by the shop", "buy milk", "by next week", "by noon",
+                     "By the way call ali", "call ali by friday", ""):
+            self.assertEqual(F.buy_not_by(kept), kept)
+
     def test_the_ing_forms_of_add_and_remove_are_understood(self):
         self.assertEqual(frame("deleting all the notes"), ("remove", ("note",), "all", 0, "", ""))
         self.assertEqual(frame("removing the last task")[:3], ("remove", ("task",), "last"))

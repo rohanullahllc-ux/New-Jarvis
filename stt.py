@@ -9,6 +9,7 @@ Whisper heard nothing (STT_ENGINE=auto), or not used at all (STT_ENGINE=whisper)
 The models live in models/whisper. Whisper writes capital letters and punctuation; they are taken out here, because the
 rest of Jarvis reads plain lower-case words, as Google gives them.
 """
+import collections
 import importlib.util
 import re
 import sys
@@ -23,8 +24,11 @@ from config import BASE_DIR, STT_ENGINE, STT_MODEL
 MODEL_DIR = BASE_DIR / "models" / "whisper"
 THREADS = 3                       # the CPU has 2 cores / 4 threads; one is left for the rest of Jarvis
 MIN_SECONDS = 0.25                # shorter than this is a click, not a word
+MAX_TOKENS = 110                  # the most Whisper may write for one stretch of speech (a long question is about 50): bounds a runaway
 
-# Words Jarvis hears all day. Whisper spells a word it has just been shown far more reliably ("task", not "test").
+# Words Jarvis hears all day. Whisper spells a word it has just been shown far more reliably ("task", not "test"). It must stay a
+# LIST OF WORDS: with whole command sentences in it ("add a task buy milk, add a note buy bread") Whisper starts repeating them
+# until it runs out of room, as measured with four voices.
 VOCABULARY = ("Jarvis. Commands: open, close, task, tasks, note, notes, folder, to do list, add, remove, delete, clear, "
               "timer, reminder, screenshot, microphone volume, weather, battery, Wi-Fi.")
 # What Whisper makes up when it is given sound with no speech in it.
@@ -113,11 +117,13 @@ def transcribe(audio):
         if len(samples) < MIN_SECONDS * 16000:
             return ""
         model = load()
+        seconds = len(samples) / 16000
         with _use_lock:
-            segments, _ = model.transcribe(samples, language="en", beam_size=1, temperature=0.0, condition_on_previous_text=False,
-                                           initial_prompt=VOCABULARY, vad_filter=True,
-                                           vad_parameters={"min_silence_duration_ms": 600})
-            kept = [s.text for s in segments if not (s.no_speech_prob > 0.6 and s.avg_logprob < -1.0) and s.avg_logprob > -1.6]
+            text = tidy(" ".join(_decode(model, samples, VOCABULARY)))
+            if runaway(text, seconds):                      # stuck repeating itself: once more without the hint, else nothing
+                text = tidy(" ".join(_decode(model, samples, None)))
+                if runaway(text, seconds):
+                    text = ""
         last_error = ""
     except SpeechRecognitionFailed as error:
         last_error = str(error)
@@ -125,10 +131,28 @@ def transcribe(audio):
     except Exception as error:                              # noqa: BLE001 - whatever the library throws, Google can still try
         last_error = f"{type(error).__name__}: {error}"
         raise SpeechRecognitionFailed(last_error) from error
-    text = tidy(" ".join(kept))
     if text in INVENTED or text.rstrip(" .") == tidy(VOCABULARY).rstrip(" ."):
         return ""
     return text
+
+
+def _decode(model, samples, hint):
+    """The kept pieces of text Whisper hears in the samples (``hint`` is the vocabulary it is shown first, or None)."""
+    segments, _ = model.transcribe(samples, language="en", beam_size=1, temperature=0.0, condition_on_previous_text=False,
+                                   initial_prompt=hint, vad_filter=True, vad_parameters={"min_silence_duration_ms": 600},
+                                   max_new_tokens=MAX_TOKENS)
+    return [s.text for s in segments if not (s.no_speech_prob > 0.6 and s.avg_logprob < -1.0) and s.avg_logprob > -1.6]
+
+
+def runaway(text, seconds):
+    """True if Whisper is stuck repeating itself, or wrote far more words than anyone could say in this time."""
+    words = text.split()
+    if len(words) > max(14, seconds * 6):
+        return True
+    if len(words) >= 8:
+        threes = collections.Counter(zip(words, words[1:], words[2:]))
+        return threes.most_common(1)[0][1] >= 3
+    return False
 
 
 if __name__ == "__main__":

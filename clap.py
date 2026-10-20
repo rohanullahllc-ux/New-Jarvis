@@ -35,6 +35,7 @@ QUIET_BETWEEN = 8.0               # between two claps the room is back to within
 MAX_GAP = 1.0                     # seconds between claps of one pattern
 MIN_GAP = 0.12                    # a second "clap" this soon is the first one echoing
 COOLDOWN = 2.0                    # seconds deaf after a pattern
+WARM_UP = 0.5                     # seconds at the start spent learning the room (the microphone's own start-up pop is not a clap)
 CHECK_AFTER = 8                   # subframes (80 ms) after the start of a sound, when it is judged
 
 
@@ -103,6 +104,10 @@ class ClapDetector:
         triggered = False
         if self.room is None:
             self.room = max(rms, 1e-4)
+        if self.time < WARM_UP:                                # still learning how loud the room is: nothing is judged yet
+            self.room = max(1e-4, 0.8 * self.room + 0.2 * min(rms, self.room * 4)) if rms else self.room
+            self.previous = rms
+            return False
         if self.pending is not None:
             self.pending["levels"].append(rms)
             self.pending["frames"].append(frame.copy())

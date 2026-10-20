@@ -102,6 +102,48 @@ class TranscribeTests(WhisperCase):
         self.assertEqual(stt.last_error, "")
 
 
+class HintAwareWhisper:
+    """Loops when it is shown a hint and speaks normally without one: the failure measured with real Whisper."""
+
+    def __init__(self, with_hint, without_hint):
+        self.with_hint, self.without_hint, self.hints = with_hint, without_hint, []
+
+    def transcribe(self, samples, **options):
+        self.hints.append(options["initial_prompt"])
+        text = self.with_hint if options["initial_prompt"] else self.without_hint
+        return iter([segment(text)] if text else []), SimpleNamespace()
+
+
+class RunawayTests(WhisperCase):
+    def test_repeating_itself_or_writing_too_many_words_is_a_runaway_but_ordinary_speech_is_not(self):
+        self.assertTrue(stt.runaway("add a note buy bread " * 20, 3.0))
+        self.assertTrue(stt.runaway("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen", 1.0))
+        for fine in ("add a task buy milk", "no no no no no", "what is the difference between a comet and an asteroid and why do they look so different"):
+            self.assertFalse(stt.runaway(fine, 4.0), fine)
+        self.assertFalse(stt.runaway("", 1.0))
+
+    def test_a_loop_caused_by_the_hint_is_retried_without_the_hint(self):
+        stt._model = HintAwareWhisper("add a note buy bread " * 15, "add a task buy milk")
+        self.assertEqual(stt.transcribe(recording()), "add a task buy milk")
+        self.assertEqual(len(stt._model.hints), 2)
+        self.assertIsNone(stt._model.hints[1])
+
+    def test_a_loop_that_stays_a_loop_is_dropped_instead_of_being_acted_on(self):
+        stt._model = HintAwareWhisper("delete all notes " * 30, "delete all notes " * 30)
+        self.assertEqual(stt.transcribe(recording()), "")
+
+    def test_a_normal_answer_is_asked_for_only_once(self):
+        stt._model = HintAwareWhisper("show my notes", "never asked")
+        self.assertEqual(stt.transcribe(recording()), "show my notes")
+        self.assertEqual(len(stt._model.hints), 1)
+
+    def test_how_much_whisper_may_write_is_bounded_and_the_hint_is_a_list_of_words_not_sentences(self):
+        self.hear([segment("hello")])
+        self.assertEqual(self.fake.calls[0][1]["max_new_tokens"], stt.MAX_TOKENS)
+        self.assertNotIn("add a task buy milk", stt.VOCABULARY)                 # (sentences in the hint make Whisper repeat them)
+        self.assertLess(stt.VOCABULARY.count("."), 4)
+
+
 class AvailabilityTests(unittest.TestCase):
     def folder_with_model(self, name="base.en"):
         folder = tempfile.TemporaryDirectory()

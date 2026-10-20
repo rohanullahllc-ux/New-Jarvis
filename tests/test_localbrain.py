@@ -1342,6 +1342,21 @@ class FourthRoundOfRecordedIssuesTests(SlightlyDifferentWordingTests):
         self.say("start adding tasks", answers=["write the report", "make a note of the meeting", "done"])               # (a task may start with a verb)
         self.assertEqual([call[1][0] for call in self.calls], ["write the report", "make a note of the meeting"])
 
+    def test_by_milk_is_written_as_buy_milk_in_tasks_notes_and_reminders(self):
+        """Whisper and Google both hear "buy" as "by" (the sentence the user keeps testing with is "add a task buy milk")."""
+        self.routes("add a task by milk", "add_task", "buy milk")
+        self.routes("take a note by bread", "take_note", "buy bread")
+        self.routes("jot down by eggs", "take_note", "buy eggs")
+        self.routes("remind me to by tea in 10 minutes", "set_reminder", message="buy tea", minutes_from_now=10)
+        self.routes("start taking notes", "take_note", "buy milk", answers=["by milk"])
+        self.say("start adding tasks", answers=["by milk", "call ali by friday", "done"])
+        self.assertEqual([call[1][0] for call in self.calls], ["buy milk", "call ali by friday"])        # (a deadline stays a deadline)
+
+    def test_make_it_to_do_list_is_make_a_to_do_list(self):
+        for phrase in ("make it to do list", "create it to do list for tomorrow"):
+            self.say(phrase, answers=["buy milk", "done"])
+            self.assertEqual([call[0] for call in self.calls], ["add_task"], phrase)
+
     def test_a_task_with_a_day_loses_its_dangling_by(self):
         self.routes("ok thank you but can you add another task in the test folder that completing java program by tomorrow",
                     "add_task", "completing java program", L._day_from_word("tomorrow"))
@@ -1417,6 +1432,46 @@ class RealBackendTests(unittest.TestCase):
         saved = sorted((self.db / "Notes").glob("*.txt"))
         self.assertEqual(len(saved), 1)
         self.assertIn("finish the program tonight", saved[0].read_text(encoding="utf-8"))
+
+
+class VoiceLockCommandTests(BrainCase):
+    """"turn off the voice lock" must work typed or spoken: it is how the owner gets out if his own voice is ever refused."""
+
+    def setUp(self):
+        super().setUp()
+        self.lock = mock.Mock()
+        self.enrolled = mock.Mock(return_value=True)
+        for patcher in (mock.patch.object(L.speaker, "set_lock", self.lock), mock.patch.object(L.speaker, "enrolled", self.enrolled),
+                        mock.patch.object(L.speaker, "status", return_value="The voice lock is on: I only answer your voice.")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_the_lock_is_switched_off_in_any_wording(self):
+        for phrase in ("turn off the voice lock", "switch off voice lock", "set the voice lock off", "disable the voice recognition",
+                       "listen to everyone", "answer to anyone", "can you turn off the voice check please", "ok now turn off my voice lock"):
+            self.lock.reset_mock()
+            self.assertIn("lock is off", self.no_tool(phrase), phrase)
+            self.lock.assert_called_once_with(False)
+
+    def test_the_lock_is_switched_on_only_when_there_is_a_voice_print(self):
+        for phrase in ("turn on the voice lock", "enable the voice lock", "only listen to me", "set the voice lock on", "only answer to me"):
+            self.lock.reset_mock()
+            self.assertIn("lock is on", self.no_tool(phrase), phrase)
+            self.lock.assert_called_once_with(True)
+        self.lock.reset_mock()
+        self.enrolled.return_value = False
+        self.assertIn("python enroll_voice.py", self.no_tool("turn on the voice lock"))
+        self.lock.assert_not_called()
+
+    def test_asking_what_the_lock_is_doing_changes_nothing(self):
+        for phrase in ("is the voice lock on", "what is the voice lock", "what's the voice lock status", "am i enrolled", "is voice lock working"):
+            self.assertIn("voice lock is on", self.no_tool(phrase), phrase)
+        self.lock.assert_not_called()
+
+    def test_other_commands_that_sound_alike_are_left_alone(self):
+        for phrase in ("turn off the lights", "lock the screen", "voice up", "listen to music"):
+            self.say(phrase)
+            self.lock.assert_not_called()
 
 
 class MicrophoneVolumeCommandTests(BrainCase):

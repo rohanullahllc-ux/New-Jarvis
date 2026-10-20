@@ -151,6 +151,24 @@ class SensitivityTests(unittest.TestCase):
         self.assertEqual(len(run(signal)[0]), 1)
 
 
+class StartUpTests(unittest.TestCase):
+    def test_the_microphones_start_up_pop_in_the_first_half_second_is_not_judged(self):
+        signal = put(room(3), a_clap(0.5), 0.1)
+        fired, detector = run(signal, clap.ClapDetector(count=1))
+        self.assertEqual(fired, [])
+        self.assertEqual(detector.events, [])
+
+    def test_the_room_level_is_learned_from_the_start_even_when_the_first_instants_are_silent(self):
+        signal = np.concatenate([np.zeros(800), room(3)])                    # (a stream that opens in digital silence)
+        _, detector = run(signal)
+        self.assertGreater(detector.room, 0.0005)
+        self.assertLess(detector.room, 0.004)
+
+    def test_a_clap_right_after_the_warm_up_is_heard(self):
+        signal = put(room(3), a_clap(0.4), 0.7)
+        self.assertEqual(len(run(signal, clap.ClapDetector(count=1))[0]), 1)
+
+
 class StateTests(unittest.TestCase):
     def test_resetting_forgets_a_half_finished_pattern(self):
         detector = clap.ClapDetector(count=2)

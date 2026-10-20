@@ -220,6 +220,14 @@ def briefing():
 def _prewarm():
     """Load the command brain in the background while the greeting is spoken (importing it takes several seconds)."""
     def load():
+        try:
+            import speaker
+            import speech
+            import stt
+            for warm_up in (speech.warm_up, stt.warm_up, speaker.warm_up):    # the natural voice, Whisper, the voice-lock model
+                warm_up()
+        except Exception:
+            pass
         if INPUT_MODE == "voice":
             try:
                 import microphone

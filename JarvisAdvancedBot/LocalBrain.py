@@ -21,6 +21,7 @@ from anthropic.lib.tools import ToolError
 
 import calc
 import config
+import speaker
 import units
 from config import DEFAULT_CITY, HOME_CURRENCY
 from JarvisAdvancedBot import ChatBrain, FreeBrain, Frames, NLU
@@ -296,7 +297,7 @@ def _clock_time(text):
 def _reminder_message(text):
     found = re.search(r"\bto (.+?)(?=\s+(?:in|at|after|for)\s+(?:\d|an?\b|half)|$)", text)
     if found and not found.group(1)[0].isdigit():
-        return _as_typed(found.group(1))
+        return Frames.buy_not_by(_as_typed(found.group(1)))
     if "timer" in text:
         return "Your timer is done"
     if "alarm" in text or "wake me" in text:
@@ -329,6 +330,7 @@ FINISHED = re.compile(r"(?:(?:i am|i'm|im|we are|we're|that is|that's|thats|all|
 
 LIST_DAY = r"(?: for (?P<day>today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))?"
 STARTING = r"(?:make|making|create|creating|start|starting|begin|beginning|build|building|prepare|preparing|set up|setting up|write|writing)"
+ARTICLE = r"(?: a| my| the| it)?"                  # ("make it to do list": Whisper hears "a" as "it" in fast speech)
 
 
 _last_kind = ["", 0.0]          # what Jarvis last did, and when: "task" or "note" (added), "fun" (a joke...), for "add another"
@@ -376,7 +378,7 @@ NOT_A_TASK = re.compile(r"(?:timing|times?|some|few|several|more|many|tasks?|thi
                         r"something|anything|details|a task|the tasks?)\b|.*\b(?:to|in|into|on) (?:it|the list|my list|this|that|there)\b")
 
 
-@intent(rf"^{STARTING}(?: me)?(?: a| my| the)?(?: new)? (?:(?:to ?do|to-do|todo)(?: list)?|tasks? list|list of (?:tasks|things to do))(?: this| just)?{LIST_DAY}(?:\b.*)?$",
+@intent(rf"^{STARTING}(?: me)?{ARTICLE}(?: new)? (?:(?:to ?do|to-do|todo)(?: list)?|tasks? list|list of (?:tasks|things to do))(?: this| just)?{LIST_DAY}(?:\b.*)?$",
         rf"^(?:i )?(?:need|want|would like) (?:a |an |my )?(?:new )?(?:to ?do|to-do|todo|task) list{LIST_DAY}$")
 def make_todo_list(m, ask):
     named = m["day"] or (DAY_WORDS.search(m.string).group(1) if DAY_WORDS.search(m.string) else "")
@@ -571,7 +573,7 @@ def forget_one_fact(m, ask):
 @intent(r"^(?:start|begin|resume)(?: taking| writing| making)(?: some| a)? notes?$",
         r"^(?:(?:start|begin|resume|keep)(?: taking| writing| making)?|take|make|write)(?: some| a few| more| my)?(?: new)? notes$")
 def start_notes(m, ask):
-    text = ask("Okay sir. What should the note say?").strip()
+    text = Frames.buy_not_by(ask("Okay sir. What should the note say?").strip())
     if text:
         _remember("note")
     return T.take_note(text) + "." if text else "Okay, no note then."
@@ -684,7 +686,7 @@ def _by_frame(text, ask):
         noun = next(iter(nouns))
         if noun == "task" and frame.many:                    # "add some tasks": one after another, like a new list
             return _take_tasks(ask, day or _day_from_word("today"))
-        item = frame.text or ask("What's the task?" if noun == "task" else "What should the note say?").strip()
+        item = Frames.buy_not_by(frame.text or ask("What's the task?" if noun == "task" else "What should the note say?").strip())
         if not item:
             return "Okay, nothing added."
         _remember(noun)
@@ -749,13 +751,13 @@ NOTE_START = r"^(?:(?:take|make|write|save|create)(?: a| me a)? note\b|note (?:t
 @intent(r"^jot(?: down)?[:,]? (?P<text>(?!a task\b).+)$")
 def jot_note(m, ask):
     _remember("note")
-    return T.take_note(_as_typed(m["text"].strip())) + "."
+    return T.take_note(Frames.buy_not_by(_as_typed(m["text"].strip()))) + "."
 
 
 @intent(NOTE_START)
 def take_note(m, ask):
     text = re.sub(NOTE_START + r"(?: that| saying| of| about)?[:,]?\s*", "", m.string).strip()
-    text = _as_typed(text) or ask("What should the note say?")
+    text = Frames.buy_not_by(_as_typed(text) or ask("What should the note say?"))
     if text:
         _remember("note")
     return T.take_note(text) + "." if text else "Okay, no note then."
@@ -875,6 +877,28 @@ def microphone_volume(m, ask):
     if re.search(r"\b(?:lower|decrease|reduce|down|quieter|softer)\b", text):
         return T.microphone_level(0, -25)
     return T.microphone_level()
+
+
+LOCK = r"(?:voice (?:lock|recognition|check|id|match)|speaker (?:lock|check))"
+
+
+@intent(rf"^(?:turn|switch|set) (?:on|off)(?: the| my)? {LOCK}$", rf"^(?:turn|switch|set)(?: the| my)? {LOCK} (?:on|off)$",
+        rf"^(?:enable|disable)(?: the| my)? {LOCK}$", r"^only (?:listen|respond|answer|talk) to me$",
+        r"^(?:listen|respond|answer|talk) to (?:everyone|anyone|everybody|all voices)$",
+        rf"^(?:is|what(?:'s| is))(?: the| my)? {LOCK}(?: on| off| status| enabled| working)?$", r"^(?:am i|have i) enrolled$")
+def voice_lock(m, ask):
+    """Switch the voice lock (only the owner's voice is answered) on or off for this run, or say what it is doing."""
+    text = m.string
+    if re.search(r"\b(?:off|disable|everyone|anyone|everybody|all voices)\b", text):
+        speaker.set_lock(False)
+        return "The voice lock is off, sir. I'll answer any voice."
+    if re.search(r"\b(?:on|enable|only)\b", text) and not re.search(r"\b(?:is|what)\b", text):
+        if not speaker.enrolled():
+            return ("I can't lock to your voice yet, sir, because I don't know it. Open a terminal in the Jarvis folder and run: "
+                    "python enroll_voice.py")
+        speaker.set_lock(True)
+        return "The voice lock is on, sir. I will only answer your voice."
+    return speaker.status()
 
 
 @intent(r"^(?:open|show|go to|browse)(?: me)?(?: the| my)? (?:tasks?|to ?do) (?:folder|holder|fol?der|directory)$")

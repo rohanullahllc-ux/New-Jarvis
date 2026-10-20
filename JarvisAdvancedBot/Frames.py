@@ -84,13 +84,30 @@ LABEL = re.compile(rf"^(?:(?:task|test|text|tas|item)\s+)?(?:number|num|#)\s*{_N
                    rf"|^(?:task|item)\s+{_NUMBER_WORD}\b[:.,-]?\s+(?=\S)")        # "task number one ..." (heard as "test number one ...")
 
 
+NOT_BOUGHT = {"the", "a", "an", "this", "that", "next", "last", "end", "then", "now", "way", "noon", "midnight", "morning", "afternoon",
+              "evening", "night", "tonight", "tomorrow", "today", "yesterday", "myself", "yourself", "himself", "herself", "week", "month",
+              "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+              "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+
+
+def buy_not_by(text):
+    """"by milk" at the start of what is to be written down is "buy milk" (the commonest slip of the ear, in Whisper and in Google);
+    "by tomorrow", "by friday", "by the end of the week" and "by 5 pm" are deadlines and are left alone."""
+    found = re.match(r"(?i)^(by)\s+([a-z']+)\b", text.strip())
+    if not found or found.group(2).lower() in NOT_BOUGHT:
+        return text
+    text = text.strip()
+    return ("B" if text[0].isupper() else "b") + "uy" + text[2:]
+
+
 def tidy_task(text):
-    """A task as it was said, without the speech around it: "at call ali" / "i will call ali" -> "call ali", and without the
-    number it was dictated with: "number 2 completing the java program" -> "completing the java program"."""
+    """A task as it was said, without the speech around it: "at call ali" / "i will call ali" -> "call ali", without the
+    number it was dictated with ("number 2 completing the java program" -> "completing the java program"), and with "by milk"
+    made "buy milk"."""
     cleaned = text.strip()
     for _ in range(3):
         cleaned = LABEL.sub("", PRONOUNS.sub("", cleaned, count=1).strip(), count=1).strip()
-    return cleaned or text.strip()
+    return buy_not_by(cleaned or text.strip())
 
 
 def parse(text) -> Optional[Frame]:

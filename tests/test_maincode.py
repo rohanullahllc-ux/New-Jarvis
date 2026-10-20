@@ -219,6 +219,26 @@ class CommandLoopTests(SessionCase):
                 thread.call_args.kwargs["target"]()
             self.assertEqual(check.call_count, checked, mode)            # (typed input never looks at the microphone)
 
+    def test_the_voice_models_are_loaded_in_the_background_too(self):
+        with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch("speech.warm_up") as voice, \
+                mock.patch("stt.warm_up") as hearing, mock.patch("speaker.warm_up") as lock, mock.patch("microphone.check_windows_volume"), \
+                mock.patch("JarvisAdvancedBot.NLU.warm_up"), mock.patch.object(MainCode, "CHAT_PRELOAD", False):
+            MainCode._prewarm()
+            voice.assert_not_called()                                    # only the background job does it
+            thread.call_args.kwargs["target"]()
+        for loaded in (voice, hearing, lock):
+            loaded.assert_called_once()
+
+    def test_a_voice_model_that_will_not_load_never_stops_the_rest_from_loading(self):
+        with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch("speech.warm_up", side_effect=RuntimeError("no")), \
+                mock.patch("stt.warm_up"), mock.patch("speaker.warm_up"), mock.patch("microphone.check_windows_volume") as volume, \
+                mock.patch("JarvisAdvancedBot.NLU.warm_up") as language, mock.patch.object(MainCode, "CHAT_PRELOAD", False), \
+                mock.patch.object(MainCode, "INPUT_MODE", "voice"):
+            MainCode._prewarm()
+            thread.call_args.kwargs["target"]()
+        volume.assert_called_once()
+        language.assert_called_once()
+
     def test_the_chat_model_is_only_loaded_ahead_of_time_when_the_setting_says_so(self):
         for setting, loaded in ((False, 0), (True, 1)):
             with mock.patch.object(MainCode.threading, "Thread") as thread, mock.patch.object(MainCode, "CHAT_PRELOAD", setting), \
