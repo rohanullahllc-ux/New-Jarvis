@@ -291,9 +291,12 @@ class CommandLineTests(Temp):
         effects = FakeEffects()
         pretend_downloads(effects, self.root)
         from tests.setup_support import make_console
-        console, out = make_console(dict(EVERYTHING), assume_yes=True)
+        full_argv = ["--project", str(self.root), *argv]
+        answers = dict(EVERYTHING)
+        answers.update(cli.load_answers(cli.parse(full_argv)))    # honour --set / --answers / --restore-from, as a real run does
+        console, out = make_console(answers, assume_yes=True)
         with World():
-            code = cli.main(["--project", str(self.root), *argv], console=console, effects=effects)
+            code = cli.main(full_argv, console=console, effects=effects)
         return code, out.getvalue(), effects
 
     def test_it_parses_the_flags(self):
